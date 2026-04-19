@@ -1,0 +1,22 @@
+{
+  "/api/shopify/webhooks/route": "/api/shopify/webhooks",
+  "/api/notifications/sync/route": "/api/notifications/sync",
+  "/_not-found/page": "/_not-found",
+  "/auth/callback/route": "/auth/callback",
+  "/contact/page": "/contact",
+  "/about/page": "/about",
+  "/book-consultation/page": "/book-consultation",
+  "/login/page": "/login",
+  "/programs/page": "/programs",
+  "/sign-up/page": "/sign-up",
+  "/methods/page": "/methods",
+  "/page": "/",
+  "/testimonials/page": "/testimonials",
+  "/app/programs/[slug]/page": "/app/programs/[slug]",
+  "/app/onboarding/page": "/app/onboarding",
+  "/app/admin/page": "/app/admin",
+  "/app/student/page": "/app/student",
+  "/app/parent/page": "/app/parent",
+  "/app/teacher/page": "/app/teacher",
+  "/app/programs/page": "/app/programs"
+}
