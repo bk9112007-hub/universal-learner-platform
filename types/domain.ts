@@ -22,6 +22,50 @@ export type Program = {
   badge?: string;
 };
 
+export type ShopifyProductSummary = {
+  id: string;
+  title: string;
+  handle: string;
+  description: string;
+  price: string;
+  cta: string;
+  href: string;
+  badge?: string;
+  featuredImageUrl: string | null;
+  featuredImageAlt: string | null;
+  collectionTitles: string[];
+};
+
+export type ShopifyCollectionSummary = {
+  id: string;
+  title: string;
+  handle: string;
+  description: string;
+  href: string;
+  imageUrl: string | null;
+  imageAlt: string | null;
+  productCountLabel: string;
+  featuredProductTitles: string[];
+};
+
+export type ShopifyArticleSummary = {
+  id: string;
+  title: string;
+  handle: string;
+  blogHandle: string;
+  excerpt: string;
+  publishedAt: string;
+  author: string | null;
+  imageUrl: string | null;
+  imageAlt: string | null;
+  href: string;
+};
+
+export type ShopifyArticleDetail = ShopifyArticleSummary & {
+  contentHtml: string;
+  blogTitle: string;
+};
+
 export type DashboardCard = {
   title: string;
   value: string;
@@ -83,10 +127,42 @@ export type AssessmentRecord = {
   dueDate: string | null;
   assignedAt: string;
   score: number | null;
+  aiScore: number | null;
+  teacherOverrideScore: number | null;
+  aiFeedback: string | null;
   teacherComment: string | null;
   studentId: string;
   studentName: string | null;
   teacherId: string;
+  topic: string | null;
+  source: "manual" | "ai";
+  cohortId: string | null;
+  questionCount: number;
+  weakTopics: string[];
+};
+
+export type QuizQuestionType = "multiple_choice" | "short_answer" | "true_false";
+
+export type QuizQuestionRecord = {
+  id: string;
+  assessmentId: string;
+  prompt: string;
+  questionType: QuizQuestionType;
+  topic: string;
+  sortOrder: number;
+  points: number;
+  options: string[];
+  explanation: string | null;
+  responseText: string | null;
+  isCorrect: boolean | null;
+  scoreAwarded: number | null;
+  aiFeedback: string | null;
+};
+
+export type TeacherQuizAnalyticsRecord = {
+  topic: string;
+  missCount: number;
+  learnerCount: number;
 };
 
 export type ParentChildRecord = {

@@ -112,3 +112,9 @@ export async function signUpAction(_: AuthFormState, formData: FormData): Promis
     success: "Account created. Check your email if confirmation is enabled, then sign in."
   };
 }
+
+export async function signOutAction() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect("/login");
+}

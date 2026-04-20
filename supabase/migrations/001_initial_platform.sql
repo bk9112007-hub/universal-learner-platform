@@ -11,6 +11,9 @@ begin
   if not exists (select 1 from pg_type where typname = 'assessment_status') then
     create type public.assessment_status as enum ('assigned', 'submitted', 'graded');
   end if;
+  if not exists (select 1 from pg_type where typname = 'assessment_question_type') then
+    create type public.assessment_question_type as enum ('multiple_choice', 'short_answer', 'true_false');
+  end if;
   if not exists (select 1 from pg_type where typname = 'resource_type') then
     create type public.resource_type as enum ('link', 'file');
   end if;
@@ -230,6 +233,45 @@ create table if not exists public.assessments (
   score numeric(4, 1),
   teacher_comment text,
   created_at timestamptz not null default now()
+);
+
+alter table public.assessments add column if not exists topic text;
+alter table public.assessments add column if not exists ai_score numeric(4, 1);
+alter table public.assessments add column if not exists teacher_override_score numeric(4, 1);
+alter table public.assessments add column if not exists ai_feedback text;
+alter table public.assessments add column if not exists weak_topics text[] not null default '{}';
+alter table public.assessments add column if not exists source text not null default 'manual';
+alter table public.assessments add column if not exists cohort_id uuid references public.cohorts (id) on delete set null;
+alter table public.assessments add column if not exists completed_at timestamptz;
+alter table public.assessments add column if not exists reviewed_at timestamptz;
+
+create table if not exists public.assessment_questions (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references public.assessments (id) on delete cascade,
+  prompt text not null,
+  question_type public.assessment_question_type not null default 'multiple_choice',
+  topic text not null default 'General',
+  sort_order integer not null default 0,
+  points integer not null default 1,
+  options jsonb not null default '[]'::jsonb,
+  correct_answer text not null,
+  correct_answer_keywords jsonb not null default '[]'::jsonb,
+  explanation text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.assessment_responses (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references public.assessments (id) on delete cascade,
+  question_id uuid not null references public.assessment_questions (id) on delete cascade,
+  student_id uuid not null references public.profiles (id) on delete cascade,
+  response_text text,
+  is_correct boolean,
+  score_awarded numeric(5, 2),
+  ai_feedback text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (assessment_id, question_id, student_id)
 );
 
 create table if not exists public.purchases (
@@ -454,6 +496,8 @@ alter table public.projects enable row level security;
 alter table public.submissions enable row level security;
 alter table public.feedback enable row level security;
 alter table public.assessments enable row level security;
+alter table public.assessment_questions enable row level security;
+alter table public.assessment_responses enable row level security;
 alter table public.purchases enable row level security;
 alter table public.enrollments enable row level security;
 alter table public.pending_program_access enable row level security;
@@ -763,6 +807,83 @@ on public.assessments
 for all
 using (public.is_teacher_or_admin())
 with check (public.is_teacher_or_admin() and auth.uid() = teacher_id);
+
+drop policy if exists "students and teachers can read assessment questions" on public.assessment_questions;
+create policy "students and teachers can read assessment questions"
+on public.assessment_questions
+for select
+using (
+  exists (
+    select 1
+    from public.assessments
+    where assessments.id = assessment_questions.assessment_id
+      and (
+        auth.uid() = assessments.student_id
+        or public.is_teacher_or_admin()
+        or public.is_parent_for_student(assessments.student_id)
+      )
+  )
+);
+
+drop policy if exists "teachers manage assessment questions" on public.assessment_questions;
+create policy "teachers manage assessment questions"
+on public.assessment_questions
+for all
+using (
+  exists (
+    select 1
+    from public.assessments
+    where assessments.id = assessment_questions.assessment_id
+      and public.is_teacher_or_admin()
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.assessments
+    where assessments.id = assessment_questions.assessment_id
+      and public.is_teacher_or_admin()
+  )
+);
+
+drop policy if exists "students can manage own assessment responses" on public.assessment_responses;
+create policy "students can manage own assessment responses"
+on public.assessment_responses
+for all
+using (
+  auth.uid() = student_id
+  and exists (
+    select 1
+    from public.assessments
+    where assessments.id = assessment_responses.assessment_id
+      and assessments.student_id = auth.uid()
+  )
+)
+with check (
+  auth.uid() = student_id
+  and exists (
+    select 1
+    from public.assessments
+    where assessments.id = assessment_responses.assessment_id
+      and assessments.student_id = auth.uid()
+  )
+);
+
+drop policy if exists "teachers and parents can read assessment responses" on public.assessment_responses;
+create policy "teachers and parents can read assessment responses"
+on public.assessment_responses
+for select
+using (
+  exists (
+    select 1
+    from public.assessments
+    where assessments.id = assessment_responses.assessment_id
+      and (
+        public.is_teacher_or_admin()
+        or public.is_parent_for_student(assessments.student_id)
+      )
+  )
+);
 
 drop policy if exists "users read own purchases" on public.purchases;
 create policy "users read own purchases"

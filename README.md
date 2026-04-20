@@ -433,6 +433,24 @@ Premium education website plus role-based PBL platform built with Next.js, Tailw
 - If no matching platform user exists, `pending_program_access` rows are created so access can be claimed later.
 - If only some products on the order map to platform programs, the purchase is marked as partially enrolled.
 
+## Shopify storefront content sync
+
+- The public marketing site now pulls products, collections, and blog articles directly from the Shopify Storefront API.
+- Next.js caches those responses with tags and a 5-minute revalidation window so pages stay fast.
+- The homepage, `/programs`, and `/insights` update automatically from Shopify once the storefront token is configured.
+- If Storefront credentials are missing, the site falls back safely for product cards and shows empty states for collections and articles.
+- Register these Shopify content webhooks to invalidate cached pages immediately after content changes:
+  - `products/create`
+  - `products/update`
+  - `products/delete`
+  - `collections/create`
+  - `collections/update`
+  - `collections/delete`
+  - `articles/create`
+  - `articles/update`
+  - `articles/delete`
+  - `blogs/update`
+
 ## Shopify setup checklist
 
 1. In Shopify, identify the product ids for the programs that should unlock platform access.
@@ -440,7 +458,12 @@ Premium education website plus role-based PBL platform built with Next.js, Tailw
 3. Expose your deployment URL publicly and register a Shopify webhook pointing to:
    - `POST https://your-domain.com/api/shopify/webhooks`
 4. Configure the webhook secret in `SHOPIFY_WEBHOOK_SECRET`.
-5. Send order events for the purchased products you want to unlock.
+5. Configure `NEXT_PUBLIC_SHOPIFY_STOREFRONT_ACCESS_TOKEN` with Storefront API access for:
+   - `unauthenticated_read_product_listings`
+   - `unauthenticated_read_content`
+6. Optional: set `SHOPIFY_STOREFRONT_API_VERSION` if you want to pin a specific Storefront API version.
+7. Send order events for the purchased products you want to unlock.
+8. Send product, collection, and article webhooks to keep the cached custom site fresh immediately after Shopify updates.
 
 ## Product mapping workflow
 

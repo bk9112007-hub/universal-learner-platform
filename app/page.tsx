@@ -1,18 +1,23 @@
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, GraduationCap, Handshake, Shield } from "lucide-react";
 
+import { ArticleCard } from "@/components/marketing/article-card";
 import { PageHero } from "@/components/marketing/page-hero";
-import { ProgramCard } from "@/components/marketing/program-card";
 import { SectionShell } from "@/components/marketing/section-shell";
+import { ShopifyCollectionCard } from "@/components/marketing/shopify-collection-card";
+import { ShopifyProductCard } from "@/components/marketing/shopify-product-card";
 import { SiteFooter } from "@/components/marketing/site-footer";
 import { SiteHeader } from "@/components/marketing/site-header";
-import { expertiseCards, programs, subjects, testimonials, tutoringSteps } from "@/lib/content/site-content";
+import { expertiseCards, subjects, testimonials, tutoringSteps } from "@/lib/content/site-content";
+import { getShopifyMarketingContent } from "@/lib/shopify/storefront";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const { products, collections, articles, isLive } = await getShopifyMarketingContent();
+
   return (
     <div>
       <SiteHeader />
-      <PageHero />
+      <PageHero programCount={products.length} articleCount={articles.length} isShopifyLive={isLive} />
 
       <SectionShell
         eyebrow="Our Expertise"
@@ -48,14 +53,33 @@ export default function HomePage() {
       <SectionShell
         eyebrow="Programs"
         title="Commerce-ready offers that stay connected to your operational platform."
-        description="Shopify remains the commerce layer for product pages and checkout, while the app handles enrollment, access control, and ongoing learning workflows."
+        description="Products now come directly from Shopify's Storefront API so your custom website stays aligned with live catalog changes, pricing, and merchandising."
         className="pt-0"
       >
         <div className="grid gap-5 lg:grid-cols-3">
-          {programs.map((program) => (
-            <ProgramCard key={program.title} program={program} />
+          {products.map((product) => (
+            <ShopifyProductCard key={product.id} product={product} />
           ))}
         </div>
+      </SectionShell>
+
+      <SectionShell
+        eyebrow="Collections"
+        title="Featured Shopify collections merchandised inside the premium marketing site."
+        description="Collections update automatically through Shopify and are cached in Next.js for fast page loads."
+        className="pt-0"
+      >
+        {collections.length > 0 ? (
+          <div className="grid gap-5 lg:grid-cols-4">
+            {collections.map((collection) => (
+              <ShopifyCollectionCard key={collection.id} collection={collection} />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-[1.75rem] border border-dashed border-slate-300 bg-white p-8 text-sm text-slate-500 shadow-soft">
+            Add Shopify collections and a storefront token to feature curated offers here automatically.
+          </div>
+        )}
       </SectionShell>
 
       <SectionShell
@@ -113,6 +137,25 @@ export default function HomePage() {
             </article>
           ))}
         </div>
+      </SectionShell>
+
+      <SectionShell
+        eyebrow="Insights"
+        title="Blog content now flows straight from Shopify into the custom website."
+        description="Publish once in Shopify and the latest articles appear here and in the dedicated insights section with cached server rendering."
+        className="pt-0"
+      >
+        {articles.length > 0 ? (
+          <div className="grid gap-5 lg:grid-cols-3">
+            {articles.map((article) => (
+              <ArticleCard key={article.id} article={article} />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-[1.75rem] border border-dashed border-slate-300 bg-white p-8 text-sm text-slate-500 shadow-soft">
+            Publish Shopify blog content to populate this section automatically.
+          </div>
+        )}
       </SectionShell>
 
       <SectionShell

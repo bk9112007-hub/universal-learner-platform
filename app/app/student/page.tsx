@@ -7,12 +7,12 @@ import { NotificationPreferenceForm } from "@/components/dashboard/notification-
 import { StudentProjectForm } from "@/components/dashboard/student-project-form";
 import { SubmissionFileList } from "@/components/dashboard/submission-file-list";
 import { assertRole } from "@/lib/auth/roles";
+import { getStudentQuizAssignments } from "@/lib/assessments/queries";
 import {
   getProfileForCurrentUser,
   getUserNotifications,
   getUserNotificationPreferences,
   getUserNotificationUnreadCount,
-  getStudentAssessments,
   getStudentAssessmentCount,
   getStudentTaskDeadlines,
   getStudentEnrolledPrograms,
@@ -41,7 +41,7 @@ export default async function StudentDashboardPage() {
 
   const [projects, assessments, assessmentCount, enrolledPrograms, taskDeadlines] = await Promise.all([
     getStudentProjects(user!.id),
-    getStudentAssessments(user!.id),
+    getStudentQuizAssignments(user!.id),
     getStudentAssessmentCount(user!.id),
     getStudentEnrolledPrograms(user!.id),
     getStudentTaskDeadlines(user!.id)
@@ -256,14 +256,14 @@ export default async function StudentDashboardPage() {
 
       <DashboardSection
         className="scroll-mt-24"
-        title="Assigned assessments"
-        description="Teachers can create and grade assessments, and your results appear here with due dates and comments."
+        title="Assigned quizzes"
+        description="Open assigned quizzes, complete them, and receive AI instant grading before the teacher review arrives."
       >
         <div id="assessments">
           {assessments.length === 0 ? (
             <EmptyState
-              title="No assessments assigned yet"
-              description="Once a teacher assigns an assessment, it will appear here with its status and results."
+              title="No quizzes assigned yet"
+              description="Once a teacher creates or generates a quiz for you, it will appear here with due dates and status."
             />
           ) : (
             <div className="grid gap-4 xl:grid-cols-2">
@@ -277,21 +277,30 @@ export default async function StudentDashboardPage() {
                     <StatusBadge status={assessment.status} />
                   </div>
                   <p className="mt-4 text-sm leading-6 text-slate-700">{assessment.description}</p>
-                  <p className="mt-4 text-sm text-slate-500">Due: {formatDate(assessment.dueDate)}</p>
+                  <p className="mt-4 text-sm text-slate-500">
+                    Due: {formatDate(assessment.dueDate)} | {assessment.questionCount} question{assessment.questionCount === 1 ? "" : "s"}
+                  </p>
                   <div className="mt-4 rounded-3xl bg-brand-50 p-4">
-                    {assessment.status === "graded" ? (
+                    {assessment.aiScore !== null ? (
                       <>
-                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-700">Result</p>
-                        <p className="mt-2 text-lg font-semibold text-brand-900">{assessment.score?.toFixed(1)}/100</p>
-                        <p className="mt-2 text-sm leading-6 text-brand-900">{assessment.teacherComment}</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-700">AI grading</p>
+                        <p className="mt-2 text-lg font-semibold text-brand-900">{assessment.aiScore?.toFixed(1)}/100</p>
+                        <p className="mt-2 text-sm leading-6 text-brand-900">{assessment.aiFeedback}</p>
+                        {assessment.teacherComment ? <p className="mt-3 text-sm leading-6 text-brand-900">{assessment.teacherComment}</p> : null}
                       </>
                     ) : (
                       <>
                         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-700">Status</p>
-                        <p className="mt-2 text-sm text-brand-900">This assessment has been assigned and is awaiting grading.</p>
+                        <p className="mt-2 text-sm text-brand-900">This quiz is assigned and ready for you to complete.</p>
                       </>
                     )}
                   </div>
+                  <Link
+                    href={`/app/student/quizzes/${assessment.id}`}
+                    className="mt-4 inline-flex rounded-full bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-800"
+                  >
+                    {assessment.status === "assigned" ? "Open quiz" : "Review results"}
+                  </Link>
                 </article>
               ))}
             </div>

@@ -1,21 +1,20 @@
 import { CohortCreateForm } from "@/components/dashboard/cohort-create-form";
 import { AppShell } from "@/components/dashboard/app-shell";
-import { AssessmentCreateForm } from "@/components/dashboard/assessment-create-form";
 import { AssessmentDeleteForm } from "@/components/dashboard/assessment-delete-form";
-import { AssessmentGradeForm } from "@/components/dashboard/assessment-grade-form";
 import { DashboardSection, EmptyState, MetricCard, StatusBadge } from "@/components/dashboard/dashboard-primitives";
 import { NotificationFeed } from "@/components/dashboard/notification-feed";
 import { NotificationPreferenceForm } from "@/components/dashboard/notification-preference-form";
+import { QuizAiGenerateForm } from "@/components/dashboard/quiz-ai-generate-form";
+import { QuizManualCreateForm } from "@/components/dashboard/quiz-manual-create-form";
+import { QuizReviewForm } from "@/components/dashboard/quiz-review-form";
 import { SubmissionFileList } from "@/components/dashboard/submission-file-list";
 import { TeacherFeedbackForm } from "@/components/dashboard/teacher-feedback-form";
 import { TeacherLearnerAssignForm } from "@/components/dashboard/teacher-learner-assign-form";
+import { getQuizAssignmentTargets, getTeacherQuizAnalytics, getTeacherQuizAssignments } from "@/lib/assessments/queries";
 import { assertRole } from "@/lib/auth/roles";
 import {
-  getAllStudentOptions,
   getProfileForCurrentUser,
-  getStudentOptionsForTeacher,
   getTeacherAssignedLearners,
-  getTeacherAssessments,
   getTeacherCohorts,
   getUserNotifications,
   getUserNotificationPreferences,
@@ -53,22 +52,21 @@ export default async function TeacherDashboardPage({
     }
   }
 
-  const [submissions, assessments, summary, students, programProgress, allStudents, cohorts, assignedLearners, triageRecords] = await Promise.all([
+  const [submissions, assessments, summary, programProgress, quizTargets, cohorts, assignedLearners, triageRecords, quizAnalytics] = await Promise.all([
     getTeacherSubmissionFeed({
       learnerId: params.learner,
       programId: params.program,
       reviewStatus: params.review_status
     }),
-    getTeacherAssessments(),
+    getTeacherQuizAssignments(user!.id, profile!.role),
     getTeacherSummary(),
-    getStudentOptionsForTeacher(),
     getTeacherProgramProgressFeed({
       learnerId: params.learner,
       programId: params.program,
       dueState: params.due_state,
       cohortId: params.cohort
     }),
-    getAllStudentOptions(),
+    getQuizAssignmentTargets(user!.id, profile!.role),
     getTeacherCohorts(),
     getTeacherAssignedLearners(),
     getTeacherTriageRecords({
@@ -78,7 +76,8 @@ export default async function TeacherDashboardPage({
       dueState: params.due_state,
       reviewStatus: params.review_status,
       cohort: params.cohort
-    })
+    }),
+    getTeacherQuizAnalytics(user!.id, profile!.role)
   ]);
 
   const gradedAssessments = assessments.filter((assessment) => assessment.status === "graded").length;
@@ -140,11 +139,11 @@ export default async function TeacherDashboardPage({
           </div>
           <div>
             <h3 className="mb-4 text-lg font-semibold text-ink">Assign learner</h3>
-            {allStudents.length === 0 ? (
+            {quizTargets.students.length === 0 ? (
               <EmptyState title="No learners available" description="Students need accounts before they can be assigned." />
             ) : (
               <TeacherLearnerAssignForm
-                students={allStudents.map((student) => ({ id: student.id, fullName: student.fullName }))}
+                students={quizTargets.students.map((student) => ({ id: student.id, fullName: student.fullName }))}
                 cohorts={cohorts.map((cohort) => ({ id: cohort.id, title: cohort.title }))}
               />
             )}
@@ -322,13 +321,28 @@ export default async function TeacherDashboardPage({
       </DashboardSection>
 
       <DashboardSection
-        title="Create an assessment"
-        description="Assign a new assessment to a student, then grade it below once the learner has completed the work."
+        title="Build quizzes"
+        description="Create quizzes manually or generate them with AI, assign them to learners or cohorts, and set due dates inside the same teacher workspace."
       >
-        {students.length === 0 ? (
-          <EmptyState title="No assigned student accounts available" description="Assign learners first before you create assessments for them." />
+        {quizTargets.students.length === 0 ? (
+          <EmptyState title="No assigned student accounts available" description="Assign learners first before you create quizzes for them." />
         ) : (
-          <AssessmentCreateForm students={students} />
+          <div className="grid gap-6 xl:grid-cols-2">
+            <div>
+              <h3 className="mb-4 text-lg font-semibold text-ink">Manual quiz builder</h3>
+              <QuizManualCreateForm
+                students={quizTargets.students.map((student) => ({ id: student.id, fullName: student.fullName }))}
+                cohorts={quizTargets.cohorts}
+              />
+            </div>
+            <div>
+              <h3 className="mb-4 text-lg font-semibold text-ink">AI quiz generator</h3>
+              <QuizAiGenerateForm
+                students={quizTargets.students.map((student) => ({ id: student.id, fullName: student.fullName }))}
+                cohorts={quizTargets.cohorts}
+              />
+            </div>
+          </div>
         )}
       </DashboardSection>
 
@@ -386,11 +400,11 @@ export default async function TeacherDashboardPage({
       </DashboardSection>
 
       <DashboardSection
-        title="Assessment grading queue"
-        description="Assign, review, and grade assessments. Students and linked parents will see the results once saved."
+        title="Quiz review queue"
+        description="Track AI-graded quizzes, add human feedback, override grades, and surface the learners or topics that need the most attention."
       >
         {assessments.length === 0 ? (
-          <EmptyState title="No assessments yet" description="Use the form above to create the first assessment for an assigned learner." />
+          <EmptyState title="No quizzes yet" description="Use the quiz builders above to create the first quiz for an assigned learner or cohort." />
         ) : (
           <div className="space-y-5">
             {assessments.map((assessment) => (
@@ -406,19 +420,53 @@ export default async function TeacherDashboardPage({
                     <StatusBadge status={assessment.status} />
                   </div>
                   <p className="mt-4 text-sm leading-6 text-slate-700">{assessment.description}</p>
-                  <p className="mt-4 text-sm text-slate-500">Due: {formatDate(assessment.dueDate)}</p>
-                  {assessment.status === "graded" ? (
+                  <p className="mt-4 text-sm text-slate-500">
+                    Due: {formatDate(assessment.dueDate)} | {assessment.questionCount} question{assessment.questionCount === 1 ? "" : "s"} | {assessment.source === "ai" ? "AI-generated" : "Manual"}
+                  </p>
+                  {assessment.aiScore !== null ? (
                     <div className="mt-4 rounded-3xl bg-brand-50 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-700">Saved grade</p>
-                      <p className="mt-2 text-lg font-semibold text-brand-900">{assessment.score?.toFixed(1)}/100</p>
-                      <p className="mt-2 text-sm leading-6 text-brand-900">{assessment.teacherComment}</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-700">AI grading</p>
+                      <p className="mt-2 text-lg font-semibold text-brand-900">{assessment.aiScore?.toFixed(1)}/100</p>
+                      <p className="mt-2 text-sm leading-6 text-brand-900">{assessment.aiFeedback}</p>
+                      {assessment.weakTopics.length > 0 ? (
+                        <p className="mt-3 text-sm text-brand-900">Weak topics: {assessment.weakTopics.join(", ")}</p>
+                      ) : null}
+                      {assessment.teacherComment ? (
+                        <div className="mt-4 rounded-3xl bg-white p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Human review</p>
+                          <p className="mt-2 text-sm leading-6 text-slate-700">{assessment.teacherComment}</p>
+                          {assessment.teacherOverrideScore !== null ? <p className="mt-3 text-sm font-semibold text-slate-700">Override score: {assessment.teacherOverrideScore.toFixed(1)}%</p> : null}
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
                 <div className="space-y-4">
-                  <AssessmentGradeForm assessmentId={assessment.id} />
+                  <QuizReviewForm
+                    assessmentId={assessment.id}
+                    existingComment={assessment.teacherComment}
+                    existingOverrideScore={assessment.teacherOverrideScore}
+                  />
                   <AssessmentDeleteForm assessmentId={assessment.id} />
                 </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </DashboardSection>
+
+      <DashboardSection
+        title="Weak topic analytics"
+        description="AI instant grading aggregates missed topic tags so you can quickly spot where the current quiz set is revealing the most struggle."
+      >
+        {quizAnalytics.length === 0 ? (
+          <EmptyState title="No topic analytics yet" description="Analytics appear after learners submit quizzes and the AI grading engine identifies weak topic areas." />
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-3">
+            {quizAnalytics.map((topic) => (
+              <article key={topic.topic} className="rounded-[1.5rem] border border-slate-200 p-5">
+                <p className="text-lg font-semibold text-ink">{topic.topic}</p>
+                <p className="mt-3 text-sm text-slate-600">{topic.missCount} misses across {topic.learnerCount} learner{topic.learnerCount === 1 ? "" : "s"}.</p>
               </article>
             ))}
           </div>

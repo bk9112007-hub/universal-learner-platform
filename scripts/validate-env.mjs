@@ -1,3 +1,7 @@
+import { config } from "dotenv";
+
+config({ path: ".env.local" });
+config();
 const mode = process.argv[2] ?? "production";
 
 const requiredByMode = {

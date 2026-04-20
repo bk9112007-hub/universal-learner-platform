@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
 
-import { programs, testimonials } from "@/lib/content/site-content";
+type PageHeroProps = {
+  programCount: number;
+  articleCount: number;
+  isShopifyLive: boolean;
+};
 
-export function PageHero() {
+export function PageHero({ programCount, articleCount, isShopifyLive }: PageHeroProps) {
   return (
     <section className="relative overflow-hidden">
       <div className="absolute inset-0 bg-[linear-gradient(135deg,#0e2e63_0%,#1c5fd2_45%,#90c4ff_100%)]" />
@@ -35,15 +39,15 @@ export function PageHero() {
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur">
               <p className="text-sm text-blue-100">Programs</p>
-              <p className="mt-2 text-3xl font-semibold">{programs.length}</p>
+              <p className="mt-2 text-3xl font-semibold">{programCount}</p>
             </div>
             <div className="rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur">
-              <p className="text-sm text-blue-100">Trust Signals</p>
-              <p className="mt-2 text-3xl font-semibold">Shopify + Supabase</p>
+              <p className="text-sm text-blue-100">Storefront</p>
+              <p className="mt-2 text-3xl font-semibold">{isShopifyLive ? "Live from Shopify" : "Cached fallback"}</p>
             </div>
             <div className="rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur">
-              <p className="text-sm text-blue-100">Success Stories</p>
-              <p className="mt-2 text-3xl font-semibold">{testimonials.length}+</p>
+              <p className="text-sm text-blue-100">Insights</p>
+              <p className="mt-2 text-3xl font-semibold">{articleCount} latest</p>
             </div>
           </div>
         </div>

@@ -5,6 +5,7 @@ import { DashboardSection, EmptyState, MetricCard } from "@/components/dashboard
 import { NotificationFeed } from "@/components/dashboard/notification-feed";
 import { NotificationPreferenceForm } from "@/components/dashboard/notification-preference-form";
 import { ParentLinkForm } from "@/components/dashboard/parent-link-form";
+import { getParentLinkedQuizResults } from "@/lib/assessments/queries";
 import { assertRole } from "@/lib/auth/roles";
 import {
   getParentAccessibleProgramSummaries,
@@ -40,12 +41,13 @@ export default async function ParentDashboardPage() {
     }
   }
 
-  const [summary, linkedChildren, programs, purchases, childDeadlines] = await Promise.all([
+  const [summary, linkedChildren, programs, purchases, childDeadlines, linkedQuizResults] = await Promise.all([
     getParentSummary(user!.id),
     getParentLinkedChildren(user!.id),
     getParentAccessibleProgramSummaries(user!.id),
     getUserPurchases(user!.id),
-    getParentChildTaskDeadlines(user!.id)
+    getParentChildTaskDeadlines(user!.id),
+    getParentLinkedQuizResults(user!.id)
   ]);
 
   return (
@@ -208,6 +210,41 @@ export default async function ParentDashboardPage() {
             </div>
           )}
         </div>
+      </DashboardSection>
+
+      <DashboardSection
+        title="Quiz results"
+        description="Parents can review quiz scores, AI grading summaries, and teacher feedback in read-only form for linked learners."
+      >
+        {linkedQuizResults.length === 0 ? (
+          <EmptyState title="No linked learner quiz results yet" description="Quiz results will appear here after linked learners complete assigned quizzes." />
+        ) : (
+          <div className="space-y-4">
+            {linkedQuizResults.map((child) => (
+              <article key={child.studentId} className="rounded-[1.5rem] border border-slate-200 p-5">
+                <h3 className="text-xl font-semibold text-ink">{child.studentName}</h3>
+                {child.quizzes.length === 0 ? (
+                  <p className="mt-3 text-sm text-slate-500">No quizzes assigned for this learner yet.</p>
+                ) : (
+                  <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                    {child.quizzes.slice(0, 6).map((quiz) => (
+                      <div key={quiz.id} className="rounded-[1.25rem] bg-slate-50 p-4">
+                        <p className="text-sm font-semibold text-ink">{quiz.title}</p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {quiz.subject} | Due {formatDate(quiz.dueDate)}
+                        </p>
+                        <p className="mt-2 text-sm text-slate-700">
+                          {quiz.aiScore !== null ? `AI score ${quiz.aiScore.toFixed(1)}%.` : "Awaiting submission."}
+                          {quiz.teacherComment ? ` Teacher feedback: ${quiz.teacherComment}` : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
       </DashboardSection>
 
       <DashboardSection
