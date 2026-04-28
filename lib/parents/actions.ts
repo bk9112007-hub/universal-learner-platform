@@ -33,29 +33,36 @@ export async function linkChildToParentAction(
   }
 
   const supabase = await createClient();
-  const { data: childProfile, error: childProfileError } = await supabase
-    .from("profiles")
-    .select("id, role")
-    .eq("email", parsed.data.childEmail.toLowerCase())
-    .single();
-
-  if (childProfileError) {
-    return { error: childProfileError.message };
-  }
-  if (childProfile.role !== "student") {
-    return { error: "That account is not a student profile." };
-  }
-
-  const { error } = await supabase.from("parent_student_links").upsert({
-    parent_id: user.id,
-    student_id: childProfile.id
+  const { data, error } = await supabase.rpc("link_child_to_parent_by_email", {
+    target_email: parsed.data.childEmail.toLowerCase()
   });
 
   if (error) {
-    return { error: error.message };
+    return { error: "We could not link that child account right now. Please try again." };
   }
 
-  revalidatePath("/app/parent");
+  const result = data?.[0];
 
-  return { success: "Child linked successfully." };
+  if (!result) {
+    return { error: "We could not link that child account right now. Please try again." };
+  }
+
+  if (result.status === "linked") {
+    revalidatePath("/app/parent");
+    return { success: "Child linked successfully." };
+  }
+
+  if (result.status === "not_found") {
+    return { error: "No student account was found for that email address." };
+  }
+
+  if (result.status === "not_student") {
+    return { error: "That account is not a student profile." };
+  }
+
+  if (result.status === "forbidden") {
+    return { error: "You are not allowed to link a child account right now." };
+  }
+
+  return { error: "We could not link that child account right now. Please try again." };
 }

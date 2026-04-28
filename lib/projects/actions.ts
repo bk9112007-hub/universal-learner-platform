@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { getProfileForCurrentUser } from "@/lib/dashboard/queries";
 import { syncLessonProgressForUser } from "@/lib/programs/progress";
+import { ensureProjectWorkspaceSeedFromBrief } from "@/lib/projects/workspace";
 import { getSubmissionBucket, sanitizeFileName } from "@/lib/storage/files";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -18,6 +19,7 @@ const MAX_FILES = 3;
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
 const createProjectSchema = z.object({
+  personalizedBriefId: z.string().uuid().optional(),
   title: z.string().min(3).max(120),
   subject: z.string().min(2).max(80),
   description: z.string().min(10).max(1200),
@@ -34,6 +36,7 @@ const feedbackSchema = z.object({
 
 export async function createProjectSubmissionAction(_: ActionState, formData: FormData): Promise<ActionState> {
   const parsed = createProjectSchema.safeParse({
+    personalizedBriefId: formData.get("personalizedBriefId") || undefined,
     title: formData.get("title"),
     subject: formData.get("subject"),
     description: formData.get("description"),
@@ -61,26 +64,72 @@ export async function createProjectSubmissionAction(_: ActionState, formData: Fo
   }
 
   const supabase = await createClient();
-  const { data: project, error: projectError } = await supabase
-    .from("projects")
-    .insert({
-      student_id: user.id,
-      title: parsed.data.title,
-      subject: parsed.data.subject,
-      description: parsed.data.description,
-      status: "submitted"
-    })
-    .select("id")
-    .single();
+  let projectId: string | null = null;
 
-  if (projectError || !project) {
-    return { error: projectError?.message ?? "Unable to create the project." };
+  if (parsed.data.personalizedBriefId) {
+    const { data: existingProject, error: existingProjectError } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("student_id", user.id)
+      .eq("personalized_brief_id", parsed.data.personalizedBriefId)
+      .order("created_at", { ascending: false })
+      .maybeSingle();
+
+    if (existingProjectError) {
+      return { error: existingProjectError.message };
+    }
+
+    if (existingProject?.id) {
+      projectId = existingProject.id;
+      const { error: projectUpdateError } = await supabase
+        .from("projects")
+        .update({
+          title: parsed.data.title,
+          subject: parsed.data.subject,
+          description: parsed.data.description,
+          status: "submitted"
+        })
+        .eq("id", projectId);
+
+      if (projectUpdateError) {
+        return { error: projectUpdateError.message };
+      }
+    }
+  }
+
+  if (!projectId) {
+    const { data: project, error: projectError } = await supabase
+      .from("projects")
+      .insert({
+        student_id: user.id,
+        personalized_brief_id: parsed.data.personalizedBriefId ?? null,
+        title: parsed.data.title,
+        subject: parsed.data.subject,
+        description: parsed.data.description,
+        status: "submitted"
+      })
+      .select("id")
+      .single();
+
+    if (projectError || !project) {
+      return { error: projectError?.message ?? "Unable to create the project." };
+    }
+
+    projectId = project.id;
+  }
+
+  if (parsed.data.personalizedBriefId && projectId) {
+    try {
+      await ensureProjectWorkspaceSeedFromBrief(projectId, parsed.data.personalizedBriefId, user.id);
+    } catch (error) {
+      return { error: (error as Error).message };
+    }
   }
 
   const { data: submission, error: submissionError } = await supabase
     .from("submissions")
     .insert({
-      project_id: project.id,
+      project_id: projectId,
       student_id: user.id,
       submission_text: parsed.data.submissionText,
       status: "submitted"
@@ -106,7 +155,7 @@ export async function createProjectSubmissionAction(_: ActionState, formData: Fo
 
     const { error: fileRecordError } = await supabase.from("files").insert({
       owner_id: user.id,
-      project_id: project.id,
+      project_id: projectId,
       submission_id: submission.id,
       bucket,
       storage_path: storagePath,
@@ -122,6 +171,7 @@ export async function createProjectSubmissionAction(_: ActionState, formData: Fo
   revalidatePath("/app/student");
   revalidatePath("/app/teacher");
   revalidatePath("/app/parent");
+  revalidatePath(`/app/projects/${projectId}`);
 
   return {
     success:
@@ -211,9 +261,35 @@ export async function createTeacherFeedbackAction(_: ActionState, formData: Form
     });
   }
 
+  const adminSupabase = createAdminClient();
+  const { data: projectTaskProgress, error: projectTaskProgressError } = await adminSupabase
+    .from("project_task_progress")
+    .select("id, project_id")
+    .eq("submission_id", parsed.data.submissionId)
+    .maybeSingle();
+
+  if (projectTaskProgressError) {
+    return { error: projectTaskProgressError.message };
+  }
+
+  if (projectTaskProgress?.id) {
+    const { error: workspaceProgressUpdateError } = await adminSupabase
+      .from("project_task_progress")
+      .update({
+        status: taskNextStatus,
+        completed_at: taskNextStatus === "completed" ? new Date().toISOString() : null
+      })
+      .eq("id", projectTaskProgress.id);
+
+    if (workspaceProgressUpdateError) {
+      return { error: workspaceProgressUpdateError.message };
+    }
+  }
+
   revalidatePath("/app/student");
   revalidatePath("/app/teacher");
   revalidatePath("/app/parent");
+  revalidatePath(`/app/projects/${parsed.data.projectId}`);
   if (projectContext?.program_id) {
     revalidatePath("/app/programs");
   }

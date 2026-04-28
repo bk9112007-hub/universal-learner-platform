@@ -3,9 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { getPostAuthDestination } from "@/lib/auth/post-auth";
-import { getRoleRoute } from "@/lib/auth/roles";
-import { claimPendingProgramAccessForEmail } from "@/lib/programs/access";
+import { resolvePostAuthDestination, ensureProfileForUser } from "@/lib/auth/profile-repair";
 import { createClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/domain";
 
@@ -26,6 +24,10 @@ const signUpSchema = z.object({
   role: z.enum(["student", "teacher", "parent", "admin"])
 });
 
+const completeRoleSchema = z.object({
+  role: z.enum(["student", "teacher", "parent", "admin"])
+});
+
 export async function loginAction(_: AuthFormState, formData: FormData): Promise<AuthFormState> {
   const parsed = loginSchema.safeParse({
     email: formData.get("email"),
@@ -43,20 +45,8 @@ export async function loginAction(_: AuthFormState, formData: FormData): Promise
     return { error: error?.message ?? "Unable to sign in right now." };
   }
 
-  const claimed = await claimPendingProgramAccessForEmail({
-    email: parsed.data.email,
-    userId: data.user.id
-  });
-
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", data.user.id).single();
-  const role = (profile?.role as UserRole | undefined) ?? "student";
-  const destination = await getPostAuthDestination({
-    userId: data.user.id,
-    role,
-    claimedProgramSlugs: claimed.claimedProgramSlugs
-  });
-
-  redirect(destination || getRoleRoute(role));
+  const resolution = await resolvePostAuthDestination(data.user);
+  redirect(resolution.destination);
 }
 
 export async function signUpAction(_: AuthFormState, formData: FormData): Promise<AuthFormState> {
@@ -76,6 +66,10 @@ export async function signUpAction(_: AuthFormState, formData: FormData): Promis
     email: parsed.data.email,
     password: parsed.data.password,
     options: {
+      data: {
+        full_name: parsed.data.fullName,
+        role: parsed.data.role
+      },
       emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/auth/callback`
     }
   });
@@ -85,26 +79,15 @@ export async function signUpAction(_: AuthFormState, formData: FormData): Promis
   }
 
   if (data.user) {
-    await supabase.from("profiles").upsert({
-      id: data.user.id,
-      email: parsed.data.email.toLowerCase(),
-      full_name: parsed.data.fullName,
-      role: parsed.data.role
-    });
-
-    const claimed = await claimPendingProgramAccessForEmail({
-      email: parsed.data.email,
-      userId: data.user.id
+    await ensureProfileForUser(data.user, {
+      preferredRole: parsed.data.role
     });
 
     if (data.session) {
-      const destination = await getPostAuthDestination({
-        userId: data.user.id,
-        role: parsed.data.role,
-        claimedProgramSlugs: claimed.claimedProgramSlugs
+      const resolution = await resolvePostAuthDestination(data.user, {
+        preferredRole: parsed.data.role
       });
-
-      redirect(destination || getRoleRoute(parsed.data.role));
+      redirect(resolution.destination);
     }
   }
 
@@ -117,4 +100,29 @@ export async function signOutAction() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/login");
+}
+
+export async function completeRoleAction(_: AuthFormState, formData: FormData): Promise<AuthFormState> {
+  const parsed = completeRoleSchema.safeParse({
+    role: formData.get("role")
+  });
+
+  if (!parsed.success) {
+    return { error: "Please choose a valid role to continue." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Please sign in again to complete account setup." };
+  }
+
+  const resolution = await resolvePostAuthDestination(user, {
+    preferredRole: parsed.data.role
+  });
+
+  redirect(resolution.destination);
 }

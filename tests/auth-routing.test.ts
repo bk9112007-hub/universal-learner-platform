@@ -41,14 +41,7 @@ describe("auth and role routing", () => {
   });
 
   it("redirects callback users to the resolved post-auth destination", async () => {
-    const supabase = createSupabaseMock({
-      profiles: createQuery({
-        singleResult: {
-          data: { role: "student" },
-          error: null
-        }
-      })
-    });
+    const supabase = createSupabaseMock({});
     supabase.auth.getUser = vi.fn(async () => ({
       data: { user: { id: "student-1", email: "student@example.com" } }
     }));
@@ -56,11 +49,10 @@ describe("auth and role routing", () => {
     vi.doMock("@/lib/supabase/server", () => ({
       createClient: async () => supabase
     }));
-    vi.doMock("@/lib/programs/access", () => ({
-      claimPendingProgramAccessForEmail: vi.fn(async () => ({ claimedProgramSlugs: [] }))
-    }));
-    vi.doMock("@/lib/auth/post-auth", () => ({
-      getPostAuthDestination: vi.fn(async () => "/app/programs/grade-ace-tutoring")
+    vi.doMock("@/lib/auth/profile-repair", () => ({
+      resolvePostAuthDestination: vi.fn(async () => ({
+        destination: "/app/programs/grade-ace-tutoring"
+      }))
     }));
 
     const { GET } = await import("@/app/auth/callback/route");

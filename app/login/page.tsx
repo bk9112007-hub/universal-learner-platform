@@ -9,6 +9,10 @@ import { getCurrentProfile } from "@/lib/supabase/queries";
 export default async function LoginPage() {
   const { profile, user } = await getCurrentProfile();
 
+  if (user && (!profile || profile.role_source === "fallback")) {
+    redirect("/complete-role");
+  }
+
   if (user && profile?.role) {
     redirect(getRoleRoute(profile.role));
   }

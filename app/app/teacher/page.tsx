@@ -1,9 +1,13 @@
 import { CohortCreateForm } from "@/components/dashboard/cohort-create-form";
+import Link from "next/link";
+
 import { AppShell } from "@/components/dashboard/app-shell";
 import { AssessmentDeleteForm } from "@/components/dashboard/assessment-delete-form";
 import { DashboardSection, EmptyState, MetricCard, StatusBadge } from "@/components/dashboard/dashboard-primitives";
 import { NotificationFeed } from "@/components/dashboard/notification-feed";
 import { NotificationPreferenceForm } from "@/components/dashboard/notification-preference-form";
+import { PersonalizedProjectBriefEditor } from "@/components/dashboard/personalized-project-brief-editor";
+import { PersonalizedProjectGeneratorForm } from "@/components/dashboard/personalized-project-generator-form";
 import { QuizAiGenerateForm } from "@/components/dashboard/quiz-ai-generate-form";
 import { QuizManualCreateForm } from "@/components/dashboard/quiz-manual-create-form";
 import { QuizReviewForm } from "@/components/dashboard/quiz-review-form";
@@ -15,6 +19,7 @@ import { assertRole } from "@/lib/auth/roles";
 import {
   getProfileForCurrentUser,
   getTeacherAssignedLearners,
+  getTeacherAssignmentDirectory,
   getTeacherCohorts,
   getUserNotifications,
   getUserNotificationPreferences,
@@ -25,6 +30,10 @@ import {
   getTeacherTriageRecords
 } from "@/lib/dashboard/queries";
 import { formatDate } from "@/lib/format";
+import {
+  getPersonalizedProjectFormDirectory,
+  getTeacherPersonalizedProjectBriefs
+} from "@/lib/projects/personalization";
 import type { NotificationPreferenceRecord, NotificationRecord } from "@/types/domain";
 
 export default async function TeacherDashboardPage({
@@ -52,7 +61,20 @@ export default async function TeacherDashboardPage({
     }
   }
 
-  const [submissions, assessments, summary, programProgress, quizTargets, cohorts, assignedLearners, triageRecords, quizAnalytics] = await Promise.all([
+  const [
+    submissions,
+    assessments,
+    summary,
+    programProgress,
+    quizTargets,
+    cohorts,
+    assignedLearners,
+    assignmentDirectory,
+    triageRecords,
+    quizAnalytics,
+    projectFormDirectory,
+    personalizedProjectBriefs
+  ] = await Promise.all([
     getTeacherSubmissionFeed({
       learnerId: params.learner,
       programId: params.program,
@@ -69,6 +91,7 @@ export default async function TeacherDashboardPage({
     getQuizAssignmentTargets(user!.id, profile!.role),
     getTeacherCohorts(),
     getTeacherAssignedLearners(),
+    getTeacherAssignmentDirectory(),
     getTeacherTriageRecords({
       learnerId: params.learner,
       programId: params.program,
@@ -77,7 +100,9 @@ export default async function TeacherDashboardPage({
       reviewStatus: params.review_status,
       cohort: params.cohort
     }),
-    getTeacherQuizAnalytics(user!.id, profile!.role)
+    getTeacherQuizAnalytics(user!.id, profile!.role),
+    getPersonalizedProjectFormDirectory(),
+    getTeacherPersonalizedProjectBriefs(user!.id, profile!.role as "teacher" | "admin")
   ]);
 
   const gradedAssessments = assessments.filter((assessment) => assessment.status === "graded").length;
@@ -139,14 +164,37 @@ export default async function TeacherDashboardPage({
           </div>
           <div>
             <h3 className="mb-4 text-lg font-semibold text-ink">Assign learner</h3>
-            {quizTargets.students.length === 0 ? (
-              <EmptyState title="No learners available" description="Students need accounts before they can be assigned." />
+            {assignmentDirectory.totalStudentAccountCount === 0 ? (
+              <EmptyState title="No student accounts exist yet" description="Students need to sign up before they can be assigned to a teacher." />
+            ) : assignmentDirectory.availableStudents.length === 0 ? (
+              <EmptyState
+                title={assignmentDirectory.incompleteStudents.length > 0 ? "Student accounts need repair before assignment" : "All complete student accounts are already assigned"}
+                description={
+                  assignmentDirectory.incompleteStudents.length > 0
+                    ? "Ask an admin to repair the broken student profile records listed below before assigning those learners."
+                    : "New student accounts will appear here automatically once they are created."
+                }
+              />
             ) : (
               <TeacherLearnerAssignForm
-                students={quizTargets.students.map((student) => ({ id: student.id, fullName: student.fullName }))}
+                students={assignmentDirectory.availableStudents.map((student) => ({ id: student.id, fullName: student.fullName }))}
                 cohorts={cohorts.map((cohort) => ({ id: cohort.id, title: cohort.title }))}
+                helperText="Only complete student profiles appear here. Already-assigned learners stay in the roster below."
               />
             )}
+
+            {assignmentDirectory.incompleteStudents.length > 0 ? (
+              <div className="mt-4 rounded-[1.5rem] border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm font-semibold text-amber-900">Incomplete student profiles</p>
+                <div className="mt-3 space-y-2 text-sm text-amber-800">
+                  {assignmentDirectory.incompleteStudents.map((student) => (
+                    <p key={student.id}>
+                      {student.fullName} ({student.email ?? "no email"}) | {student.issue === "missing_role" ? "role missing" : "profile missing"}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -321,6 +369,78 @@ export default async function TeacherDashboardPage({
       </DashboardSection>
 
       <DashboardSection
+        title="Personalized Project Creation Engine"
+        description="Generate premium project briefs from learner interests, grade-level skill data, strengths, weaknesses, teacher priorities, and AI-style personalization."
+      >
+        {projectFormDirectory.students.length === 0 && projectFormDirectory.cohorts.length === 0 ? (
+          <EmptyState
+            title="No teacher targets available yet"
+            description="Assign at least one learner or cohort before generating personalized projects."
+          />
+        ) : (
+          <div className="grid gap-6 xl:grid-cols-[0.9fr,1.1fr]">
+            <div className="rounded-[1.5rem] border border-slate-200 p-5">
+              <h3 className="text-lg font-semibold text-ink">Generate a personalized brief</h3>
+              <p className="mt-2 text-sm text-slate-600">
+                Build an individual or group project around student preferences, diagnostic growth areas, and teacher instructional priorities.
+              </p>
+              <div className="mt-4">
+                <PersonalizedProjectGeneratorForm students={projectFormDirectory.students} cohorts={projectFormDirectory.cohorts} />
+              </div>
+            </div>
+            <div className="space-y-4">
+              {personalizedProjectBriefs.length === 0 ? (
+                <EmptyState
+                  title="No personalized briefs generated yet"
+                  description="The first generated project will appear here with milestones, skills targeted, rubric, and a teacher editing surface."
+                />
+              ) : (
+                personalizedProjectBriefs.map((brief) => (
+                  <article key={brief.id} className="rounded-[1.5rem] border border-slate-200 p-5">
+                    <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-xl font-semibold text-ink">{brief.title}</h3>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {brief.subject} | {brief.targetLabel}
+                        </p>
+                        <p className="mt-2 text-sm text-slate-600">
+                          Priorities: {brief.teacherPriorities || "No teacher priorities saved."}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-800">{brief.status}</span>
+                    </div>
+                    <div className="mb-4 grid gap-4 md:grid-cols-3">
+                      <div className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-700">
+                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Strengths focus</p>
+                        <p className="mt-2">{brief.focusStrengths.join(", ") || "None selected"}</p>
+                      </div>
+                      <div className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-700">
+                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Weaknesses focus</p>
+                        <p className="mt-2">{brief.focusWeaknesses.join(", ") || "None selected"}</p>
+                      </div>
+                      <div className="rounded-3xl bg-brand-50 p-4 text-sm text-brand-900">
+                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-700">Skills targeted</p>
+                        <p className="mt-2">{brief.skillsTargeted.join(", ")}</p>
+                      </div>
+                    </div>
+                    {brief.workspaceProjectId ? (
+                      <Link
+                        href={`/app/projects/${brief.workspaceProjectId}`}
+                        className="mb-4 inline-flex rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-brand-300 hover:text-brand-900"
+                      >
+                        Open workspace
+                      </Link>
+                    ) : null}
+                    <PersonalizedProjectBriefEditor brief={brief} />
+                  </article>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </DashboardSection>
+
+      <DashboardSection
         title="Build quizzes"
         description="Create quizzes manually or generate them with AI, assign them to learners or cohorts, and set due dates inside the same teacher workspace."
       >
@@ -363,6 +483,7 @@ export default async function TeacherDashboardPage({
                       <p className="mt-1 text-sm text-slate-500">
                         {submission.subject} | {submission.studentName}
                       </p>
+                      {submission.personalizedBriefTitle ? <p className="mt-1 text-sm text-brand-700">From brief: {submission.personalizedBriefTitle}</p> : null}
                       {submission.contextLabel ? <p className="mt-1 text-sm text-brand-700">{submission.contextLabel}</p> : null}
                     </div>
                     <StatusBadge status={submission.projectStatus} />
@@ -391,6 +512,12 @@ export default async function TeacherDashboardPage({
                       <p className="mt-2 text-sm text-brand-900">No feedback has been sent yet for this submission.</p>
                     )}
                   </div>
+                  <Link
+                    href={`/app/projects/${submission.projectId}`}
+                    className="mt-4 inline-flex rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-brand-300 hover:text-brand-900"
+                  >
+                    Open workspace
+                  </Link>
                 </div>
                 <TeacherFeedbackForm submissionId={submission.submissionId} projectId={submission.projectId} studentId={submission.studentId} />
               </article>

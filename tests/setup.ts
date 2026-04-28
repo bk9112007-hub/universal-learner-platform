@@ -6,6 +6,8 @@ vi.mock("next/cache", () => ({
   unstable_cache: ((callback: (...args: any[]) => unknown) => callback) as typeof import("next/cache").unstable_cache
 }));
 
+vi.mock("server-only", () => ({}));
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();

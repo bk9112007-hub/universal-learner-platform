@@ -205,6 +205,14 @@ export default async function ParentDashboardPage() {
                     </p>
                     <p className="mt-2 text-sm text-slate-600">{child.latestFeedbackComment ?? "No teacher feedback has been added yet."}</p>
                   </div>
+                  {child.latestProjectId ? (
+                    <Link
+                      href={`/app/projects/${child.latestProjectId}`}
+                      className="mt-4 inline-flex rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-brand-300 hover:text-brand-900"
+                    >
+                      Open latest project workspace
+                    </Link>
+                  ) : null}
                 </article>
               ))}
             </div>

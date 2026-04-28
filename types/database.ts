@@ -27,6 +27,7 @@ export type Database = {
           email: string | null;
           full_name: string | null;
           role: UserRole;
+          role_source: "explicit" | "fallback";
           avatar_path: string | null;
           created_at: string;
         };
@@ -35,6 +36,7 @@ export type Database = {
           email?: string | null;
           full_name?: string | null;
           role: UserRole;
+          role_source?: "explicit" | "fallback";
           avatar_path?: string | null;
           created_at?: string;
         };
@@ -42,6 +44,7 @@ export type Database = {
           email?: string | null;
           full_name?: string | null;
           role?: UserRole;
+          role_source?: "explicit" | "fallback";
           avatar_path?: string | null;
         };
         Relationships: [
@@ -381,6 +384,11 @@ export type Database = {
           program_id: string | null;
           lesson_id: string | null;
           lesson_task_id: string | null;
+          personalized_brief_id: string | null;
+          personalized_reason: string | null;
+          target_skills: string[] | null;
+          workspace_rubric: Json;
+          workspace_timeline: Json;
           title: string;
           subject: string;
           description: string;
@@ -393,6 +401,11 @@ export type Database = {
           program_id?: string | null;
           lesson_id?: string | null;
           lesson_task_id?: string | null;
+          personalized_brief_id?: string | null;
+          personalized_reason?: string | null;
+          target_skills?: string[] | null;
+          workspace_rubric?: Json;
+          workspace_timeline?: Json;
           title: string;
           subject: string;
           description: string;
@@ -403,10 +416,488 @@ export type Database = {
           program_id?: string | null;
           lesson_id?: string | null;
           lesson_task_id?: string | null;
+          personalized_brief_id?: string | null;
+          personalized_reason?: string | null;
+          target_skills?: string[] | null;
+          workspace_rubric?: Json;
+          workspace_timeline?: Json;
           title?: string;
           subject?: string;
           description?: string;
           status?: Database["public"]["Enums"]["project_status"];
+        };
+        Relationships: [];
+      };
+      project_milestones: {
+        Row: {
+          id: string;
+          project_id: string;
+          title: string;
+          description: string;
+          sort_order: number;
+          due_date: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          title: string;
+          description?: string;
+          sort_order?: number;
+          due_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          title?: string;
+          description?: string;
+          sort_order?: number;
+          due_date?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      project_tasks: {
+        Row: {
+          id: string;
+          project_id: string;
+          milestone_id: string | null;
+          title: string;
+          description: string;
+          task_type: string;
+          sort_order: number;
+          is_required: boolean;
+          due_date: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          milestone_id?: string | null;
+          title: string;
+          description?: string;
+          task_type?: string;
+          sort_order?: number;
+          is_required?: boolean;
+          due_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          milestone_id?: string | null;
+          title?: string;
+          description?: string;
+          task_type?: string;
+          sort_order?: number;
+          is_required?: boolean;
+          due_date?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      project_resources: {
+        Row: {
+          id: string;
+          project_id: string;
+          title: string;
+          description: string;
+          resource_type: string;
+          external_url: string | null;
+          sort_order: number;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          title: string;
+          description?: string;
+          resource_type?: string;
+          external_url?: string | null;
+          sort_order?: number;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          title?: string;
+          description?: string;
+          resource_type?: string;
+          external_url?: string | null;
+          sort_order?: number;
+          created_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      project_task_progress: {
+        Row: {
+          id: string;
+          project_id: string;
+          task_id: string;
+          user_id: string;
+          status: Database["public"]["Enums"]["lesson_task_status"];
+          response_text: string | null;
+          submission_id: string | null;
+          completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          task_id: string;
+          user_id: string;
+          status?: Database["public"]["Enums"]["lesson_task_status"];
+          response_text?: string | null;
+          submission_id?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          status?: Database["public"]["Enums"]["lesson_task_status"];
+          response_text?: string | null;
+          submission_id?: string | null;
+          completed_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      project_reflections: {
+        Row: {
+          id: string;
+          project_id: string;
+          user_id: string;
+          note: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          user_id: string;
+          note?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          note?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      student_interest_assessments: {
+        Row: {
+          student_id: string;
+          career_preference: string | null;
+          entertainment_preference: string | null;
+          work_style: string | null;
+          industry_interest: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          student_id: string;
+          career_preference?: string | null;
+          entertainment_preference?: string | null;
+          work_style?: string | null;
+          industry_interest?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          career_preference?: string | null;
+          entertainment_preference?: string | null;
+          work_style?: string | null;
+          industry_interest?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      student_skill_diagnostics: {
+        Row: {
+          student_id: string;
+          reading_level: string | null;
+          writing_level: string | null;
+          math_level: string | null;
+          history_level: string | null;
+          logic_level: string | null;
+          strengths: string[] | null;
+          weaknesses: string[] | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          student_id: string;
+          reading_level?: string | null;
+          writing_level?: string | null;
+          math_level?: string | null;
+          history_level?: string | null;
+          logic_level?: string | null;
+          strengths?: string[] | null;
+          weaknesses?: string[] | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          reading_level?: string | null;
+          writing_level?: string | null;
+          math_level?: string | null;
+          history_level?: string | null;
+          logic_level?: string | null;
+          strengths?: string[] | null;
+          weaknesses?: string[] | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      personalized_project_briefs: {
+        Row: {
+          id: string;
+          teacher_id: string;
+          cohort_id: string | null;
+          group_name: string | null;
+          project_mode: string;
+          subject: string;
+          title: string;
+          description: string;
+          teacher_priorities: string;
+          focus_strengths: string[] | null;
+          focus_weaknesses: string[] | null;
+          skills_targeted: string[] | null;
+          milestones: Json;
+          rubric: Json;
+          timeline: Json;
+          status: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          teacher_id: string;
+          cohort_id?: string | null;
+          group_name?: string | null;
+          project_mode?: string;
+          subject: string;
+          title: string;
+          description: string;
+          teacher_priorities?: string;
+          focus_strengths?: string[] | null;
+          focus_weaknesses?: string[] | null;
+          skills_targeted?: string[] | null;
+          milestones?: Json;
+          rubric?: Json;
+          timeline?: Json;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          cohort_id?: string | null;
+          group_name?: string | null;
+          project_mode?: string;
+          subject?: string;
+          title?: string;
+          description?: string;
+          teacher_priorities?: string;
+          focus_strengths?: string[] | null;
+          focus_weaknesses?: string[] | null;
+          skills_targeted?: string[] | null;
+          milestones?: Json;
+          rubric?: Json;
+          timeline?: Json;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      personalized_project_brief_students: {
+        Row: {
+          id: string;
+          brief_id: string;
+          student_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          brief_id: string;
+          student_id: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      project_hooks: {
+        Row: {
+          id: string;
+          title: string;
+          summary: string;
+          details: string;
+          status: "draft" | "approved" | "archived";
+          created_by: string | null;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          summary: string;
+          details: string;
+          status?: "draft" | "approved" | "archived";
+          created_by?: string | null;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          title?: string;
+          summary?: string;
+          details?: string;
+          status?: "draft" | "approved" | "archived";
+          created_by?: string | null;
+          updated_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      project_roles: {
+        Row: {
+          id: string;
+          title: string;
+          summary: string;
+          details: string;
+          status: "draft" | "approved" | "archived";
+          created_by: string | null;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          summary: string;
+          details: string;
+          status?: "draft" | "approved" | "archived";
+          created_by?: string | null;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          title?: string;
+          summary?: string;
+          details?: string;
+          status?: "draft" | "approved" | "archived";
+          created_by?: string | null;
+          updated_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      project_scenarios: {
+        Row: {
+          id: string;
+          title: string;
+          summary: string;
+          details: string;
+          status: "draft" | "approved" | "archived";
+          created_by: string | null;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          summary: string;
+          details: string;
+          status?: "draft" | "approved" | "archived";
+          created_by?: string | null;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          title?: string;
+          summary?: string;
+          details?: string;
+          status?: "draft" | "approved" | "archived";
+          created_by?: string | null;
+          updated_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      project_activities: {
+        Row: {
+          id: string;
+          title: string;
+          summary: string;
+          details: string;
+          status: "draft" | "approved" | "archived";
+          created_by: string | null;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          summary: string;
+          details: string;
+          status?: "draft" | "approved" | "archived";
+          created_by?: string | null;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          title?: string;
+          summary?: string;
+          details?: string;
+          status?: "draft" | "approved" | "archived";
+          created_by?: string | null;
+          updated_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      project_outputs: {
+        Row: {
+          id: string;
+          title: string;
+          summary: string;
+          details: string;
+          status: "draft" | "approved" | "archived";
+          created_by: string | null;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          summary: string;
+          details: string;
+          status?: "draft" | "approved" | "archived";
+          created_by?: string | null;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          title?: string;
+          summary?: string;
+          details?: string;
+          status?: "draft" | "approved" | "archived";
+          created_by?: string | null;
+          updated_by?: string | null;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -981,7 +1472,17 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      link_child_to_parent_by_email: {
+        Args: {
+          target_email: string;
+        };
+        Returns: {
+          status: string;
+          linked_student_id: string | null;
+        }[];
+      };
+    };
     Enums: {
       user_role: UserRole;
       project_status: "draft" | "submitted" | "reviewed" | "needs_revision";

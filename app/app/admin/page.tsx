@@ -1,3 +1,4 @@
+import { BrokenUserRepairForm } from "@/components/admin/broken-user-repair-form";
 import { EnrollmentGrantForm } from "@/components/admin/enrollment-grant-form";
 import { EnrollmentRevokeForm } from "@/components/admin/enrollment-revoke-form";
 import { NotificationRetryForm } from "@/components/admin/notification-retry-form";
@@ -16,6 +17,7 @@ import { assertRole } from "@/lib/auth/roles";
 import { getDeploymentReadiness } from "@/lib/config/readiness";
 import {
   getAdminCommerceOverview,
+  getAdminBrokenUserRecords,
   getAdminNotificationOverview,
   getAdminProgramContentOverview,
   getAdminPurchasesByState,
@@ -23,6 +25,7 @@ import {
   getProfileForCurrentUser
 } from "@/lib/dashboard/queries";
 import { formatDate } from "@/lib/format";
+import Link from "next/link";
 
 function formatMoney(amountCents: number | null, currency: string | null) {
   if (amountCents === null) {
@@ -46,11 +49,12 @@ export default async function AdminDashboardPage({
   const params = await searchParams;
   const purchaseStateFilter = params.processing_state ?? "all";
 
-  const [summary, commerce, filteredPurchases, notificationOverview] = await Promise.all([
+  const [summary, commerce, filteredPurchases, notificationOverview, brokenUsers] = await Promise.all([
     getAdminSummary(),
     getAdminCommerceOverview(),
     getAdminPurchasesByState(purchaseStateFilter),
-    getAdminNotificationOverview()
+    getAdminNotificationOverview(),
+    getAdminBrokenUserRecords()
   ]);
   const contentOverview = await getAdminProgramContentOverview();
   const readiness = getDeploymentReadiness();
@@ -76,6 +80,33 @@ export default async function AdminDashboardPage({
         <MetricCard label="Projects" value={String(summary.projectCount)} detail="Live total across student submissions." />
         <MetricCard label="Purchases" value={String(summary.purchaseCount)} detail="Webhook-ingested commerce events." />
       </section>
+
+      <DashboardSection
+        title="Broken user records"
+        description="These are the accounts that would previously have required manual SQL fixes. Repair them here and keep role data consistent with auth."
+      >
+        {brokenUsers.length === 0 ? (
+          <EmptyState title="No broken user records found" description="All known auth users currently have valid profile rows and explicit roles." />
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-2">
+            {brokenUsers.map((brokenUser) => (
+              <BrokenUserRepairForm key={brokenUser.id} user={brokenUser} />
+            ))}
+          </div>
+        )}
+      </DashboardSection>
+
+      <DashboardSection
+        title="Project catalog"
+        description="Phase 1 of the catalog engine is now live for staff and admin users. Use it to curate hooks, roles, scenarios, activities, and outputs before project formulation is added."
+      >
+        <Link
+          href="/app/admin/project-catalog"
+          className="inline-flex rounded-full bg-brand-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-800"
+        >
+          Open project catalog
+        </Link>
+      </DashboardSection>
 
       <DashboardSection
         title="Deployment readiness"

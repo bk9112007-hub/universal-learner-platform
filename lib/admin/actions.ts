@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { ensureProfileForUser } from "@/lib/auth/profile-repair";
 import { NOTIFICATION_CATALOG } from "@/lib/notifications/catalog";
 import { retryNotificationDelivery, syncNotificationsForAllUsers } from "@/lib/notifications/service";
+import { getProjectCatalogDefinition, PROJECT_CATALOG_TYPES } from "@/lib/project-catalog/catalog";
 import { getProfileForCurrentUser } from "@/lib/dashboard/queries";
 import { processShopifyOrderWebhook } from "@/lib/shopify/webhook-processing";
 import { getProgramResourcesBucket } from "@/lib/storage/program-resources";
@@ -46,6 +48,11 @@ const retryPurchaseSchema = z.object({
   purchaseId: z.string().uuid()
 });
 
+const repairUserSchema = z.object({
+  userId: z.string().uuid(),
+  role: z.enum(["student", "teacher", "parent", "admin"]).optional()
+});
+
 const notificationTypeValues = new Set(NOTIFICATION_CATALOG.map((entry) => entry.type));
 
 const notificationSettingSchema = z.object({
@@ -57,6 +64,22 @@ const notificationSettingSchema = z.object({
 
 const retryNotificationSchema = z.object({
   notificationId: z.string().uuid()
+});
+
+const catalogTypeValues = PROJECT_CATALOG_TYPES;
+
+const projectCatalogItemSchema = z.object({
+  itemId: z.string().uuid().optional(),
+  catalogType: z.enum(catalogTypeValues),
+  title: z.string().min(6).max(140),
+  summary: z.string().min(24).max(400),
+  details: z.string().min(80).max(4000),
+  status: z.enum(["draft", "approved", "archived"])
+});
+
+const projectCatalogArchiveSchema = z.object({
+  itemId: z.string().uuid(),
+  catalogType: z.enum(catalogTypeValues)
 });
 
 const programModuleSchema = z.object({
@@ -114,8 +137,19 @@ async function requireAdmin() {
   return { user, profile };
 }
 
+async function requireStaffOrAdmin() {
+  const { profile, user } = await getProfileForCurrentUser();
+  if (!user || !profile || !["teacher", "admin"].includes(profile.role)) {
+    throw new Error("Only staff and admins can manage the project catalog.");
+  }
+
+  return { user, profile };
+}
+
 function revalidateAdminSurfaces() {
   revalidatePath("/app/admin");
+  revalidatePath("/app/admin/project-catalog");
+  revalidatePath("/app/admin/project-catalog/[catalogType]", "page");
   revalidatePath("/app/programs");
   revalidatePath("/app/student");
   revalidatePath("/app/parent");
@@ -125,6 +159,90 @@ function revalidateAdminSurfaces() {
 
 function sanitizeFileName(fileName: string) {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, "-");
+}
+
+export async function upsertProjectCatalogItemAction(_: AdminActionState, formData: FormData): Promise<AdminActionState> {
+  let actor;
+  try {
+    actor = await requireStaffOrAdmin();
+  } catch (error) {
+    return { error: (error as Error).message };
+  }
+
+  const parsed = projectCatalogItemSchema.safeParse({
+    itemId: formData.get("itemId") || undefined,
+    catalogType: formData.get("catalogType"),
+    title: formData.get("title"),
+    summary: formData.get("summary"),
+    details: formData.get("details"),
+    status: formData.get("status")
+  });
+
+  if (!parsed.success) {
+    return { error: "Please provide a fully fleshed title, summary, details, and status." };
+  }
+
+  const definition = getProjectCatalogDefinition(parsed.data.catalogType);
+  const supabase = createAdminClient();
+  const payload = {
+    title: parsed.data.title,
+    summary: parsed.data.summary,
+    details: parsed.data.details,
+    status: parsed.data.status,
+    updated_by: actor.user.id
+  };
+
+  const query = parsed.data.itemId
+    ? supabase.from(definition.table).update(payload).eq("id", parsed.data.itemId)
+    : supabase.from(definition.table).insert({
+        ...payload,
+        created_by: actor.user.id
+      });
+
+  const { error } = await query;
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidateAdminSurfaces();
+  revalidatePath(definition.type === parsed.data.catalogType ? `/app/admin/project-catalog/${definition.type}` : "/app/admin/project-catalog");
+  return { success: parsed.data.itemId ? `${definition.singular} updated.` : `${definition.singular} created.` };
+}
+
+export async function archiveProjectCatalogItemAction(_: AdminActionState, formData: FormData): Promise<AdminActionState> {
+  let actor;
+  try {
+    actor = await requireStaffOrAdmin();
+  } catch (error) {
+    return { error: (error as Error).message };
+  }
+
+  const parsed = projectCatalogArchiveSchema.safeParse({
+    itemId: formData.get("itemId"),
+    catalogType: formData.get("catalogType")
+  });
+
+  if (!parsed.success) {
+    return { error: "A valid catalog item is required." };
+  }
+
+  const definition = getProjectCatalogDefinition(parsed.data.catalogType);
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from(definition.table)
+    .update({
+      status: "archived",
+      updated_by: actor.user.id
+    })
+    .eq("id", parsed.data.itemId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidateAdminSurfaces();
+  revalidatePath(`/app/admin/project-catalog/${parsed.data.catalogType}`);
+  return { success: `${definition.singular} archived.` };
 }
 
 export async function upsertProgramAction(_: AdminActionState, formData: FormData): Promise<AdminActionState> {
@@ -358,6 +476,44 @@ export async function retryPurchaseProcessingAction(_: AdminActionState, formDat
   }
 
   return { success: `Purchase retry completed with state: ${String((result.body as any).processingState ?? "processed")}.` };
+}
+
+export async function repairUserProfileAction(_: AdminActionState, formData: FormData): Promise<AdminActionState> {
+  try {
+    await requireAdmin();
+  } catch (error) {
+    return { error: (error as Error).message };
+  }
+
+  const parsed = repairUserSchema.safeParse({
+    userId: formData.get("userId"),
+    role: formData.get("role") || undefined
+  });
+
+  if (!parsed.success) {
+    return { error: "Please choose a valid user and optional role." };
+  }
+
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.auth.admin.getUserById(parsed.data.userId);
+
+  if (error || !data.user) {
+    return { error: error?.message ?? "That auth user could not be found." };
+  }
+
+  try {
+    const repair = await ensureProfileForUser(data.user, {
+      preferredRole: parsed.data.role ?? null
+    });
+    revalidateAdminSurfaces();
+    return {
+      success: repair.needsRoleCompletion
+        ? "Profile repaired, but the user still needs to complete role selection at next login."
+        : "User profile repaired successfully."
+    };
+  } catch (repairError) {
+    return { error: (repairError as Error).message };
+  }
 }
 
 export async function updateNotificationSettingAction(_: AdminActionState, formData: FormData): Promise<AdminActionState> {

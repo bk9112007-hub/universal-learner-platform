@@ -90,6 +90,43 @@ export async function assignLearnerAction(_: ClassroomActionState, formData: For
   }
 
   const supabase = await createClient();
+  const { data: studentProfile, error: studentError } = await supabase
+    .from("profiles")
+    .select("id, role, role_source")
+    .eq("id", parsed.data.studentId)
+    .maybeSingle();
+
+  if (studentError) {
+    return { error: studentError.message };
+  }
+
+  if (!studentProfile) {
+    return { error: "That learner account is incomplete right now. Repair the student profile before assigning them." };
+  }
+
+  if (studentProfile.role !== "student") {
+    return { error: "Only student accounts can be assigned to a teacher." };
+  }
+
+  if (studentProfile.role_source !== "explicit") {
+    return { error: "That learner still needs to complete role setup before assignment." };
+  }
+
+  const { data: existingAssignment, error: assignmentLookupError } = await supabase
+    .from("teacher_student_assignments")
+    .select("id, cohort_id")
+    .eq("teacher_id", actor.user.id)
+    .eq("student_id", parsed.data.studentId)
+    .maybeSingle();
+
+  if (assignmentLookupError) {
+    return { error: assignmentLookupError.message };
+  }
+
+  if (existingAssignment && existingAssignment.cohort_id === (parsed.data.cohortId ?? null)) {
+    return { error: "This learner is already assigned with that cohort selection." };
+  }
+
   const { error } = await supabase.from("teacher_student_assignments").upsert(
     {
       teacher_id: actor.user.id,

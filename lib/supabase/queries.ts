@@ -13,12 +13,12 @@ export async function getCurrentProfile() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, full_name, role, avatar_path, created_at")
+    .select("id, full_name, role, role_source, avatar_path, created_at")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
   return {
     user,
-    profile: profile as { id: string; full_name: string | null; role: UserRole } | null
+    profile: profile as { id: string; full_name: string | null; role: UserRole; role_source: "explicit" | "fallback" } | null
   };
 }

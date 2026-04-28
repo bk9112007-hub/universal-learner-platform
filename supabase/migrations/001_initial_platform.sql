@@ -47,9 +47,12 @@ create table if not exists public.profiles (
   email text unique,
   full_name text,
   role public.user_role not null default 'student',
+  role_source text not null default 'explicit',
   avatar_path text,
   created_at timestamptz not null default now()
 );
+
+alter table public.profiles add column if not exists role_source text not null default 'explicit';
 
 create table if not exists public.programs (
   id uuid primary key default gen_random_uuid(),
@@ -187,6 +190,11 @@ create table if not exists public.projects (
   program_id uuid references public.programs (id) on delete set null,
   lesson_id uuid references public.program_lessons (id) on delete set null,
   lesson_task_id uuid references public.lesson_tasks (id) on delete set null,
+  personalized_brief_id uuid,
+  personalized_reason text,
+  target_skills text[] not null default '{}',
+  workspace_rubric jsonb not null default '[]'::jsonb,
+  workspace_timeline jsonb not null default '[]'::jsonb,
   title text not null,
   subject text not null,
   description text not null,
@@ -197,8 +205,140 @@ create table if not exists public.projects (
 alter table public.projects add column if not exists program_id uuid references public.programs (id) on delete set null;
 alter table public.projects add column if not exists lesson_id uuid references public.program_lessons (id) on delete set null;
 alter table public.projects add column if not exists lesson_task_id uuid references public.lesson_tasks (id) on delete set null;
+alter table public.projects add column if not exists personalized_brief_id uuid;
+alter table public.projects add column if not exists personalized_reason text;
+alter table public.projects add column if not exists target_skills text[] not null default '{}';
+alter table public.projects add column if not exists workspace_rubric jsonb not null default '[]'::jsonb;
+alter table public.projects add column if not exists workspace_timeline jsonb not null default '[]'::jsonb;
 alter table public.lesson_task_progress add column if not exists project_id uuid references public.projects (id) on delete set null;
 alter table public.lesson_tasks add column if not exists due_date date;
+
+create table if not exists public.project_milestones (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects (id) on delete cascade,
+  title text not null,
+  description text not null default '',
+  sort_order integer not null default 0,
+  due_date date,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.project_tasks (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects (id) on delete cascade,
+  milestone_id uuid references public.project_milestones (id) on delete set null,
+  title text not null,
+  description text not null default '',
+  task_type text not null default 'checklist' check (task_type in ('checklist', 'submission')),
+  sort_order integer not null default 0,
+  is_required boolean not null default true,
+  due_date date,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.project_resources (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects (id) on delete cascade,
+  title text not null,
+  description text not null default '',
+  resource_type text not null default 'link' check (resource_type in ('link', 'note')),
+  external_url text,
+  sort_order integer not null default 0,
+  created_by uuid references public.profiles (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.project_task_progress (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects (id) on delete cascade,
+  task_id uuid not null references public.project_tasks (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  status public.lesson_task_status not null default 'not_started',
+  response_text text,
+  submission_id uuid references public.submissions (id) on delete set null,
+  completed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (project_id, task_id, user_id)
+);
+
+create table if not exists public.project_reflections (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  note text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (project_id, user_id)
+);
+
+create table if not exists public.student_interest_assessments (
+  student_id uuid primary key references public.profiles (id) on delete cascade,
+  career_preference text,
+  entertainment_preference text,
+  work_style text,
+  industry_interest text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.student_skill_diagnostics (
+  student_id uuid primary key references public.profiles (id) on delete cascade,
+  reading_level text,
+  writing_level text,
+  math_level text,
+  history_level text,
+  logic_level text,
+  strengths text[] not null default '{}',
+  weaknesses text[] not null default '{}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.personalized_project_briefs (
+  id uuid primary key default gen_random_uuid(),
+  teacher_id uuid not null references public.profiles (id) on delete cascade,
+  cohort_id uuid references public.cohorts (id) on delete set null,
+  group_name text,
+  project_mode text not null default 'individual',
+  subject text not null default 'Interdisciplinary',
+  title text not null,
+  description text not null,
+  teacher_priorities text not null default '',
+  focus_strengths text[] not null default '{}',
+  focus_weaknesses text[] not null default '{}',
+  skills_targeted text[] not null default '{}',
+  milestones jsonb not null default '[]'::jsonb,
+  rubric jsonb not null default '[]'::jsonb,
+  timeline jsonb not null default '[]'::jsonb,
+  status text not null default 'generated',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.personalized_project_brief_students (
+  id uuid primary key default gen_random_uuid(),
+  brief_id uuid not null references public.personalized_project_briefs (id) on delete cascade,
+  student_id uuid not null references public.profiles (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (brief_id, student_id)
+);
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'projects_personalized_brief_id_fkey'
+  ) then
+    alter table public.projects
+      add constraint projects_personalized_brief_id_fkey
+      foreign key (personalized_brief_id) references public.personalized_project_briefs (id) on delete set null;
+  end if;
+end $$;
 
 create table if not exists public.submissions (
   id uuid primary key default gen_random_uuid(),
@@ -386,6 +526,105 @@ begin
 end;
 $$;
 
+create or replace function public.sync_profile_from_auth_user(target_user_id uuid)
+returns table (profile_id uuid, resolved_role public.user_role, resolved_role_source text)
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  auth_user auth.users%rowtype;
+  existing_profile public.profiles%rowtype;
+  metadata_role_text text;
+  metadata_role public.user_role;
+  resolved_email text;
+  resolved_full_name text;
+begin
+  select *
+  into auth_user
+  from auth.users
+  where id = target_user_id;
+
+  if not found then
+    raise exception 'Auth user % was not found.', target_user_id;
+  end if;
+
+  select *
+  into existing_profile
+  from public.profiles
+  where id = target_user_id;
+
+  metadata_role_text := lower(trim(coalesce(auth_user.raw_user_meta_data ->> 'role', '')));
+  if metadata_role_text in ('student', 'teacher', 'parent', 'admin') then
+    metadata_role := metadata_role_text::public.user_role;
+  else
+    metadata_role := null;
+  end if;
+
+  resolved_email := lower(trim(coalesce(auth_user.email, auth_user.raw_user_meta_data ->> 'email', existing_profile.email)));
+  resolved_full_name := coalesce(
+    nullif(trim(auth_user.raw_user_meta_data ->> 'full_name'), ''),
+    nullif(trim(auth_user.raw_user_meta_data ->> 'fullName'), ''),
+    nullif(trim(auth_user.raw_user_meta_data ->> 'name'), ''),
+    nullif(trim(concat_ws(' ', auth_user.raw_user_meta_data ->> 'first_name', auth_user.raw_user_meta_data ->> 'last_name')), ''),
+    existing_profile.full_name
+  );
+
+  insert into public.profiles (id, email, full_name, role, role_source)
+  values (
+    auth_user.id,
+    case when resolved_email = '' then null else resolved_email end,
+    resolved_full_name,
+    coalesce(metadata_role, existing_profile.role, 'student'::public.user_role),
+    case
+      when metadata_role is not null then 'explicit'
+      when existing_profile.id is not null then coalesce(existing_profile.role_source, 'fallback')
+      else 'fallback'
+    end
+  )
+  on conflict (id) do update
+  set
+    email = coalesce(excluded.email, public.profiles.email),
+    full_name = coalesce(excluded.full_name, public.profiles.full_name),
+    role = excluded.role,
+    role_source = excluded.role_source;
+
+  return query
+  select
+    auth_user.id,
+    coalesce(metadata_role, existing_profile.role, 'student'::public.user_role),
+    case
+      when metadata_role is not null then 'explicit'
+      when existing_profile.id is not null then coalesce(existing_profile.role_source, 'fallback')
+      else 'fallback'
+    end;
+end;
+$$;
+
+create or replace function public.handle_auth_user_profile_sync()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  perform public.sync_profile_from_auth_user(new.id);
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_profile_created on auth.users;
+create trigger on_auth_user_profile_created
+after insert on auth.users
+for each row
+execute function public.handle_auth_user_profile_sync();
+
+drop trigger if exists on_auth_user_profile_updated on auth.users;
+create trigger on_auth_user_profile_updated
+after update of email, raw_user_meta_data on auth.users
+for each row
+execute function public.handle_auth_user_profile_sync();
+
 drop trigger if exists user_lesson_progress_set_updated_at on public.user_lesson_progress;
 create trigger user_lesson_progress_set_updated_at
 before update on public.user_lesson_progress
@@ -404,10 +643,60 @@ before update on public.lesson_task_progress
 for each row
 execute function public.set_updated_at_generic();
 
+drop trigger if exists student_interest_assessments_set_updated_at on public.student_interest_assessments;
+create trigger student_interest_assessments_set_updated_at
+before update on public.student_interest_assessments
+for each row
+execute function public.set_updated_at_generic();
+
+drop trigger if exists student_skill_diagnostics_set_updated_at on public.student_skill_diagnostics;
+create trigger student_skill_diagnostics_set_updated_at
+before update on public.student_skill_diagnostics
+for each row
+execute function public.set_updated_at_generic();
+
+drop trigger if exists personalized_project_briefs_set_updated_at on public.personalized_project_briefs;
+create trigger personalized_project_briefs_set_updated_at
+before update on public.personalized_project_briefs
+for each row
+execute function public.set_updated_at_generic();
+
+drop trigger if exists project_milestones_set_updated_at on public.project_milestones;
+create trigger project_milestones_set_updated_at
+before update on public.project_milestones
+for each row
+execute function public.set_updated_at_generic();
+
+drop trigger if exists project_tasks_set_updated_at on public.project_tasks;
+create trigger project_tasks_set_updated_at
+before update on public.project_tasks
+for each row
+execute function public.set_updated_at_generic();
+
+drop trigger if exists project_resources_set_updated_at on public.project_resources;
+create trigger project_resources_set_updated_at
+before update on public.project_resources
+for each row
+execute function public.set_updated_at_generic();
+
+drop trigger if exists project_task_progress_set_updated_at on public.project_task_progress;
+create trigger project_task_progress_set_updated_at
+before update on public.project_task_progress
+for each row
+execute function public.set_updated_at_generic();
+
+drop trigger if exists project_reflections_set_updated_at on public.project_reflections;
+create trigger project_reflections_set_updated_at
+before update on public.project_reflections
+for each row
+execute function public.set_updated_at_generic();
+
 create or replace function public.current_user_role()
 returns public.user_role
 language sql
 stable
+security definer
+set search_path = public
 as $$
   select role from public.profiles where id = auth.uid()
 $$;
@@ -424,6 +713,8 @@ create or replace function public.is_assigned_teacher_for_student(student_uuid u
 returns boolean
 language sql
 stable
+security definer
+set search_path = public
 as $$
   select exists (
     select 1
@@ -436,6 +727,8 @@ create or replace function public.is_admin()
 returns boolean
 language sql
 stable
+security definer
+set search_path = public
 as $$
   select coalesce(public.current_user_role() = 'admin', false)
 $$;
@@ -444,6 +737,8 @@ create or replace function public.is_parent_for_student(student_uuid uuid)
 returns boolean
 language sql
 stable
+security definer
+set search_path = public
 as $$
   select exists (
     select 1
@@ -451,6 +746,46 @@ as $$
     where parent_id = auth.uid() and student_id = student_uuid
   )
 $$;
+
+create or replace function public.link_child_to_parent_by_email(target_email text)
+returns table (status text, linked_student_id uuid)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  normalized_email text := lower(trim(target_email));
+  matched_student public.profiles%rowtype;
+begin
+  if public.current_user_role() not in ('parent', 'admin') then
+    return query select 'forbidden'::text, null::uuid;
+    return;
+  end if;
+
+  select *
+  into matched_student
+  from public.profiles
+  where email = normalized_email;
+
+  if not found then
+    return query select 'not_found'::text, null::uuid;
+    return;
+  end if;
+
+  if matched_student.role <> 'student' then
+    return query select 'not_student'::text, matched_student.id;
+    return;
+  end if;
+
+  insert into public.parent_student_links (parent_id, student_id)
+  values (auth.uid(), matched_student.id)
+  on conflict on constraint parent_student_links_parent_id_student_id_key do nothing;
+
+  return query select 'linked'::text, matched_student.id;
+end;
+$$;
+
+grant execute on function public.link_child_to_parent_by_email(text) to authenticated;
 
 create or replace function public.can_access_program(program_uuid uuid)
 returns boolean
@@ -480,6 +815,110 @@ as $$
   )
 $$;
 
+create or replace function public.can_access_project(project_uuid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.projects p
+    where p.id = project_uuid
+      and (
+        p.student_id = auth.uid()
+        or public.is_admin()
+        or public.is_parent_for_student(p.student_id)
+        or public.is_assigned_teacher_for_student(p.student_id)
+      )
+  )
+$$;
+
+create or replace function public.can_manage_project_workspace(project_uuid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.projects p
+    where p.id = project_uuid
+      and (
+        public.is_admin()
+        or public.is_assigned_teacher_for_student(p.student_id)
+      )
+  )
+$$;
+
+create or replace function public.can_read_personalized_project_brief(brief_uuid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.personalized_project_briefs brief
+    left join public.cohorts cohort on cohort.id = brief.cohort_id
+    where brief.id = brief_uuid
+      and (
+        public.is_admin()
+        or brief.teacher_id = auth.uid()
+        or cohort.teacher_id = auth.uid()
+        or exists (
+          select 1
+          from public.personalized_project_brief_students recipients
+          where recipients.brief_id = brief.id
+            and recipients.student_id = auth.uid()
+        )
+        or exists (
+          select 1
+          from public.personalized_project_brief_students recipients
+          where recipients.brief_id = brief.id
+            and public.is_parent_for_student(recipients.student_id)
+        )
+        or exists (
+          select 1
+          from public.personalized_project_brief_students recipients
+          join public.teacher_student_assignments assignments on assignments.student_id = recipients.student_id
+          where recipients.brief_id = brief.id
+            and assignments.teacher_id = auth.uid()
+        )
+      )
+  )
+$$;
+
+create or replace function public.can_manage_personalized_project_brief(brief_uuid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.personalized_project_briefs brief
+    left join public.cohorts cohort on cohort.id = brief.cohort_id
+    where brief.id = brief_uuid
+      and (
+        public.is_admin()
+        or brief.teacher_id = auth.uid()
+        or cohort.teacher_id = auth.uid()
+        or exists (
+          select 1
+          from public.personalized_project_brief_students recipients
+          join public.teacher_student_assignments assignments on assignments.student_id = recipients.student_id
+          where recipients.brief_id = brief.id
+            and assignments.teacher_id = auth.uid()
+        )
+      )
+  )
+$$;
+
 alter table public.roles enable row level security;
 alter table public.profiles enable row level security;
 alter table public.programs enable row level security;
@@ -493,6 +932,15 @@ alter table public.user_lesson_progress enable row level security;
 alter table public.lesson_reflections enable row level security;
 alter table public.lesson_task_progress enable row level security;
 alter table public.projects enable row level security;
+alter table public.project_milestones enable row level security;
+alter table public.project_tasks enable row level security;
+alter table public.project_resources enable row level security;
+alter table public.project_task_progress enable row level security;
+alter table public.project_reflections enable row level security;
+alter table public.student_interest_assessments enable row level security;
+alter table public.student_skill_diagnostics enable row level security;
+alter table public.personalized_project_briefs enable row level security;
+alter table public.personalized_project_brief_students enable row level security;
 alter table public.submissions enable row level security;
 alter table public.feedback enable row level security;
 alter table public.assessments enable row level security;
@@ -706,6 +1154,94 @@ for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
+drop policy if exists "students manage own interest assessments" on public.student_interest_assessments;
+create policy "students manage own interest assessments"
+on public.student_interest_assessments
+for all
+using (auth.uid() = student_id or public.is_admin())
+with check (auth.uid() = student_id or public.is_admin());
+
+drop policy if exists "teachers read student interest assessments" on public.student_interest_assessments;
+create policy "teachers read student interest assessments"
+on public.student_interest_assessments
+for select
+using (
+  public.is_admin()
+  or public.is_assigned_teacher_for_student(student_id)
+  or (public.current_user_role() = 'parent' and public.is_parent_for_student(student_id))
+);
+
+drop policy if exists "students manage own skill diagnostics" on public.student_skill_diagnostics;
+create policy "students manage own skill diagnostics"
+on public.student_skill_diagnostics
+for all
+using (auth.uid() = student_id or public.is_admin())
+with check (auth.uid() = student_id or public.is_admin());
+
+drop policy if exists "teachers read student skill diagnostics" on public.student_skill_diagnostics;
+create policy "teachers read student skill diagnostics"
+on public.student_skill_diagnostics
+for select
+using (
+  public.is_admin()
+  or public.is_assigned_teacher_for_student(student_id)
+  or (public.current_user_role() = 'parent' and public.is_parent_for_student(student_id))
+);
+
+drop policy if exists "teachers create personalized project briefs" on public.personalized_project_briefs;
+create policy "teachers create personalized project briefs"
+on public.personalized_project_briefs
+for insert
+with check (teacher_id = auth.uid() or public.is_admin());
+
+drop policy if exists "students read assigned personalized project briefs" on public.personalized_project_briefs;
+create policy "students read assigned personalized project briefs"
+on public.personalized_project_briefs
+for select
+using (public.can_read_personalized_project_brief(id));
+
+drop policy if exists "teachers manage personalized project briefs" on public.personalized_project_briefs;
+create policy "teachers manage personalized project briefs"
+on public.personalized_project_briefs
+for update
+using (public.can_manage_personalized_project_brief(id))
+with check (public.can_manage_personalized_project_brief(id));
+
+drop policy if exists "teachers delete personalized project briefs" on public.personalized_project_briefs;
+create policy "teachers delete personalized project briefs"
+on public.personalized_project_briefs
+for delete
+using (public.can_manage_personalized_project_brief(id));
+
+drop policy if exists "teachers manage personalized project brief students" on public.personalized_project_brief_students;
+create policy "teachers manage personalized project brief students"
+on public.personalized_project_brief_students
+for insert
+with check (public.can_manage_personalized_project_brief(brief_id));
+
+drop policy if exists "teachers update personalized project brief students" on public.personalized_project_brief_students;
+create policy "teachers update personalized project brief students"
+on public.personalized_project_brief_students
+for update
+using (public.can_manage_personalized_project_brief(brief_id))
+with check (public.can_manage_personalized_project_brief(brief_id));
+
+drop policy if exists "teachers delete personalized project brief students" on public.personalized_project_brief_students;
+create policy "teachers delete personalized project brief students"
+on public.personalized_project_brief_students
+for delete
+using (public.can_manage_personalized_project_brief(brief_id));
+
+drop policy if exists "students read own personalized project brief students" on public.personalized_project_brief_students;
+create policy "students read own personalized project brief students"
+on public.personalized_project_brief_students
+for select
+using (
+  public.can_manage_personalized_project_brief(brief_id)
+  or auth.uid() = student_id
+  or public.is_parent_for_student(student_id)
+);
+
 drop policy if exists "students manage own projects" on public.projects;
 create policy "students manage own projects"
 on public.projects
@@ -731,6 +1267,102 @@ on public.projects
 for update
 using (public.is_teacher_or_admin())
 with check (public.is_teacher_or_admin());
+
+drop policy if exists "users can read project milestones" on public.project_milestones;
+create policy "users can read project milestones"
+on public.project_milestones
+for select
+using (public.can_access_project(project_id));
+
+drop policy if exists "teachers manage project milestones" on public.project_milestones;
+create policy "teachers manage project milestones"
+on public.project_milestones
+for all
+using (public.can_manage_project_workspace(project_id))
+with check (public.can_manage_project_workspace(project_id));
+
+drop policy if exists "users can read project tasks" on public.project_tasks;
+create policy "users can read project tasks"
+on public.project_tasks
+for select
+using (public.can_access_project(project_id));
+
+drop policy if exists "teachers manage project tasks" on public.project_tasks;
+create policy "teachers manage project tasks"
+on public.project_tasks
+for all
+using (public.can_manage_project_workspace(project_id))
+with check (public.can_manage_project_workspace(project_id));
+
+drop policy if exists "users can read project resources" on public.project_resources;
+create policy "users can read project resources"
+on public.project_resources
+for select
+using (public.can_access_project(project_id));
+
+drop policy if exists "teachers manage project resources" on public.project_resources;
+create policy "teachers manage project resources"
+on public.project_resources
+for all
+using (public.can_manage_project_workspace(project_id))
+with check (public.can_manage_project_workspace(project_id));
+
+drop policy if exists "users can read project task progress" on public.project_task_progress;
+create policy "users can read project task progress"
+on public.project_task_progress
+for select
+using (public.can_access_project(project_id));
+
+drop policy if exists "students manage own project task progress" on public.project_task_progress;
+create policy "students manage own project task progress"
+on public.project_task_progress
+for all
+using (
+  auth.uid() = user_id
+  and exists (
+    select 1 from public.projects p
+    where p.id = project_id and p.student_id = auth.uid()
+  )
+)
+with check (
+  auth.uid() = user_id
+  and exists (
+    select 1 from public.projects p
+    where p.id = project_id and p.student_id = auth.uid()
+  )
+);
+
+drop policy if exists "teachers manage project task progress" on public.project_task_progress;
+create policy "teachers manage project task progress"
+on public.project_task_progress
+for update
+using (public.can_manage_project_workspace(project_id))
+with check (public.can_manage_project_workspace(project_id));
+
+drop policy if exists "users can read project reflections" on public.project_reflections;
+create policy "users can read project reflections"
+on public.project_reflections
+for select
+using (public.can_access_project(project_id));
+
+drop policy if exists "students manage own project reflections" on public.project_reflections;
+create policy "students manage own project reflections"
+on public.project_reflections
+for all
+using (
+  auth.uid() = user_id
+  and exists (
+    select 1 from public.projects p
+    where p.id = project_id and p.student_id = auth.uid()
+  )
+)
+with check (
+  auth.uid() = user_id
+  and exists (
+    select 1 from public.projects p
+    where p.id = project_id and p.student_id = auth.uid()
+  )
+);
 
 drop policy if exists "students manage own submissions" on public.submissions;
 create policy "students manage own submissions"

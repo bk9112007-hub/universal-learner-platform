@@ -14,7 +14,14 @@ export async function createClient() {
           return cookieStore.getAll();
         },
         setAll(cookiesToSet: Array<{ name: string; value: string; options: CookieOptions }>) {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch {
+            // Ignore cookie writes in Server Components.
+            // They are only allowed in Server Actions or Route Handlers.
+          }
         }
       }
     }

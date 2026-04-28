@@ -8,10 +8,12 @@ const initialState: ClassroomActionState = {};
 
 export function TeacherLearnerAssignForm({
   students,
-  cohorts
+  cohorts,
+  helperText
 }: {
   students: Array<{ id: string; fullName: string }>;
   cohorts: Array<{ id: string; title: string }>;
+  helperText?: string;
 }) {
   const [state, action] = useActionState(assignLearnerAction, initialState);
 
@@ -42,6 +44,7 @@ export function TeacherLearnerAssignForm({
       {state.error ? <p className="md:col-span-2 text-sm text-danger">{state.error}</p> : null}
       {state.success ? <p className="md:col-span-2 text-sm text-emerald-700">{state.success}</p> : null}
       <div className="md:col-span-2">
+        {helperText ? <p className="mb-3 text-sm text-slate-500">{helperText}</p> : null}
         <button type="submit" className="rounded-full bg-brand-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-800">
           Assign learner
         </button>

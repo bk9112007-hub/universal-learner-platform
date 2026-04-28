@@ -2,14 +2,17 @@ import { cache } from "react";
 
 import { getDeadlineState } from "@/lib/deadlines/state";
 import { getSubmissionBucket } from "@/lib/storage/files";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type {
   AdminNotificationHistoryRecord,
   AdminProgramContentRecord,
   AssessmentRecord,
+  BrokenUserRecord,
   CohortRecord,
   EnrolledProgramSummaryRecord,
   EnrollmentRecord,
+  IncompleteStudentAccountRecord,
   NotificationRecord,
   NotificationPreferenceRecord,
   NotificationRunRecord,
@@ -21,6 +24,7 @@ import type {
   StudentTaskDeadlineRecord,
   StudentProjectRecord,
   SubmissionFileRecord,
+  TeacherAssignmentDirectoryRecord,
   TeacherStudentOptionRecord,
   TeacherSubmissionRecord,
   TeacherProgramProgressRecord,
@@ -50,17 +54,17 @@ export const getProfileForCurrentUser = cache(async () => {
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("id, full_name, role, avatar_path, created_at")
+    .select("id, full_name, role, role_source, avatar_path, created_at")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
-  if (error) {
+  if (error && error.code !== "PGRST116") {
     throw new Error(error.message);
   }
 
   return {
     user,
-    profile: profile as { id: string; full_name: string | null; role: UserRole }
+    profile: (profile as { id: string; full_name: string | null; role: UserRole; role_source: "explicit" | "fallback" } | null) ?? null
   };
 });
 
@@ -116,6 +120,46 @@ async function getTeacherScope() {
   };
 }
 
+function normalizeAuthRole(value: unknown): UserRole | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "student" || normalized === "teacher" || normalized === "parent" || normalized === "admin") {
+    return normalized;
+  }
+
+  return null;
+}
+
+async function listAuthUsers() {
+  const supabase = createAdminClient();
+  const users: any[] = [];
+  let page = 1;
+  const perPage = 200;
+
+  while (true) {
+    const { data, error } = await supabase.auth.admin.listUsers({
+      page,
+      perPage
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    users.push(...(data.users ?? []));
+    if (!data.users || data.users.length < perPage) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return users;
+}
+
 export async function getStudentProjects(studentId: string): Promise<StudentProjectRecord[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -127,7 +171,11 @@ export async function getStudentProjects(studentId: string): Promise<StudentProj
       subject,
       description,
       status,
+      personalized_brief_id,
       created_at,
+      personalized_project_briefs (
+        title
+      ),
       submissions (
         id,
         submission_text,
@@ -179,6 +227,10 @@ export async function getStudentProjects(studentId: string): Promise<StudentProj
       description: project.description,
       status: project.status,
       createdAt: project.created_at,
+      personalizedBriefId: project.personalized_brief_id ?? null,
+      personalizedBriefTitle: Array.isArray(project.personalized_project_briefs)
+        ? project.personalized_project_briefs[0]?.title ?? null
+        : project.personalized_project_briefs?.title ?? null,
       latestSubmissionId: latestSubmission?.id ?? null,
       latestSubmissionText: latestSubmission?.submission_text ?? null,
       latestFeedbackComment: latestFeedback?.comment ?? null,
@@ -211,10 +263,14 @@ export async function getTeacherSubmissionFeed(filters?: {
         program_id,
         lesson_id,
         lesson_task_id,
+        personalized_brief_id,
         title,
         subject,
         description,
-        status
+        status,
+        personalized_project_briefs (
+          title
+        )
       ),
       feedback (
         teacher_name,
@@ -312,6 +368,10 @@ export async function getTeacherSubmissionFeed(filters?: {
       projectId: submission.project_id,
       studentId: submission.student_id,
       studentName: studentNameMap.get(submission.student_id) ?? "Student",
+      personalizedBriefId: project?.personalized_brief_id ?? null,
+      personalizedBriefTitle: Array.isArray(project?.personalized_project_briefs)
+        ? project.personalized_project_briefs[0]?.title ?? null
+        : project?.personalized_project_briefs?.title ?? null,
       title: project?.title ?? "Untitled Project",
       subject: project?.subject ?? "General",
       description: project?.description ?? "",
@@ -595,7 +655,12 @@ export async function getStudentOptionsForTeacher() {
 
 export async function getAllStudentOptions(): Promise<TeacherStudentOptionRecord[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase.from("profiles").select("id, full_name, role").eq("role", "student").order("full_name");
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, role, role_source")
+    .eq("role", "student")
+    .eq("role_source", "explicit")
+    .order("full_name");
 
   if (error) {
     throw new Error(error.message);
@@ -682,6 +747,65 @@ export async function getTeacherAssignedLearners(): Promise<TeacherStudentOption
     cohortId: assignment.cohort_id ?? null,
     cohortTitle: assignment.cohort_id ? cohortMap.get(assignment.cohort_id) ?? null : null
   }));
+}
+
+export async function getTeacherAssignmentDirectory(): Promise<TeacherAssignmentDirectoryRecord> {
+  const scope = await getTeacherScope();
+  if (!scope.user || !scope.profile || !["teacher", "admin"].includes(scope.profile.role)) {
+    return {
+      availableStudents: [],
+      alreadyAssignedStudents: [],
+      incompleteStudents: [],
+      totalStudentAccountCount: 0
+    };
+  }
+
+  const supabase = await createClient();
+  const [allStudents, assignedLearners, authUsers, fallbackProfiles] = await Promise.all([
+    getAllStudentOptions(),
+    getTeacherAssignedLearners(),
+    listAuthUsers(),
+    supabase.from("profiles").select("id, email, full_name").eq("role", "student").eq("role_source", "fallback")
+  ]);
+
+  if (fallbackProfiles.error) {
+    throw new Error(fallbackProfiles.error.message);
+  }
+
+  const assignedIds = new Set(assignedLearners.map((learner) => learner.id));
+  const incompleteFromAuth: IncompleteStudentAccountRecord[] = authUsers
+    .filter((authUser: any) => normalizeAuthRole(authUser.user_metadata?.role) === "student")
+    .filter((authUser: any) => !allStudents.some((student) => student.id === authUser.id))
+    .map((authUser: any) => ({
+      id: authUser.id,
+      email: authUser.email ?? null,
+      fullName:
+        authUser.user_metadata?.full_name?.trim() ||
+        authUser.user_metadata?.fullName?.trim() ||
+        authUser.email ||
+        "Student account",
+      issue: "missing_profile"
+    }));
+  const incompleteFromFallbackProfiles: IncompleteStudentAccountRecord[] = (fallbackProfiles.data ?? []).map((profile: any) => ({
+    id: profile.id,
+    email: profile.email ?? null,
+    fullName: profile.full_name ?? profile.email ?? "Student account",
+    issue: "missing_role"
+  }));
+  const incompleteStudents = Array.from(
+    new Map<string, IncompleteStudentAccountRecord>(
+      [...incompleteFromAuth, ...incompleteFromFallbackProfiles].map((student) => [student.id, student])
+    ).values()
+  );
+
+  const availableStudents = allStudents.filter((student) => !assignedIds.has(student.id));
+
+  return {
+    availableStudents,
+    alreadyAssignedStudents: assignedLearners,
+    incompleteStudents,
+    totalStudentAccountCount: allStudents.length + incompleteStudents.length
+  };
 }
 
 export async function getStudentTaskDeadlines(studentId: string): Promise<StudentTaskDeadlineRecord[]> {
@@ -985,6 +1109,7 @@ export async function getParentLinkedChildren(parentId: string): Promise<ParentC
       feedbackCount: childFeedback.length,
       gradedAssessmentCount: gradedAssessments.length,
       averageAssessmentScore,
+      latestProjectId: latestProject?.id ?? null,
       latestProjectTitle: latestProject?.title ?? null,
       latestFeedbackComment: latestFeedback?.comment ?? null,
       latestAssessmentTitle: latestAssessment?.title ?? null
@@ -1019,6 +1144,58 @@ export async function getAdminSummary() {
     projectCount: projectCount ?? 0,
     purchaseCount: purchaseCount ?? 0
   };
+}
+
+export async function getAdminBrokenUserRecords(): Promise<BrokenUserRecord[]> {
+  const [authUsers, profileRows] = await Promise.all([
+    listAuthUsers(),
+    createAdminClient().from("profiles").select("id, email, full_name, role, role_source")
+  ]);
+
+  if (profileRows.error) {
+    throw new Error(profileRows.error.message);
+  }
+
+  const profileMap = new Map<string, any>((profileRows.data ?? []).map((profile: any) => [profile.id, profile]));
+  const brokenUsers: BrokenUserRecord[] = [];
+
+  authUsers.forEach((authUser: any) => {
+    const authRole = normalizeAuthRole(authUser.user_metadata?.role);
+    const profile = profileMap.get(authUser.id) ?? null;
+    const fullName =
+      authUser.user_metadata?.full_name?.trim() ||
+      authUser.user_metadata?.fullName?.trim() ||
+      profile?.full_name ||
+      authUser.email ||
+      "User account";
+
+    if (!profile) {
+      brokenUsers.push({
+        id: authUser.id,
+        email: authUser.email ?? null,
+        fullName,
+        authRole,
+        profileRole: null,
+        profileRoleSource: null,
+        issue: "missing_profile"
+      });
+      return;
+    }
+
+    if (!authRole || profile.role_source === "fallback") {
+      brokenUsers.push({
+        id: authUser.id,
+        email: authUser.email ?? profile.email ?? null,
+        fullName,
+        authRole,
+        profileRole: profile.role,
+        profileRoleSource: profile.role_source,
+        issue: "missing_role"
+      });
+    }
+  });
+
+  return brokenUsers.sort((left, right) => left.fullName.localeCompare(right.fullName));
 }
 
 export async function getProgramAccessRecords(userId: string, role: UserRole): Promise<ProgramAccessRecord[]> {

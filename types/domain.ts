@@ -1,6 +1,7 @@
 export type UserRole = "student" | "teacher" | "parent" | "admin";
 export type ProjectStatus = "draft" | "submitted" | "reviewed" | "needs_revision";
 export type AssessmentStatus = "assigned" | "submitted" | "graded";
+export type SkillBand = "well_below" | "below" | "at" | "above" | "advanced";
 
 export type NavLink = {
   href: string;
@@ -20,6 +21,34 @@ export type Program = {
   cta: string;
   href: string;
   badge?: string;
+};
+
+export type ProjectCatalogType = "hooks" | "roles" | "scenarios" | "activities" | "outputs";
+export type ProjectCatalogStatus = "draft" | "approved" | "archived";
+
+export type ProjectCatalogItemRecord = {
+  id: string;
+  type: ProjectCatalogType;
+  title: string;
+  summary: string;
+  details: string;
+  status: ProjectCatalogStatus;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string | null;
+  updatedBy: string | null;
+};
+
+export type ProjectCatalogSummaryRecord = {
+  type: ProjectCatalogType;
+  title: string;
+  description: string;
+  href: string;
+  totalCount: number;
+  draftCount: number;
+  approvedCount: number;
+  archivedCount: number;
+  accessLabel: string;
 };
 
 export type ShopifyProductSummary = {
@@ -84,6 +113,8 @@ export type StudentProjectRecord = {
   description: string;
   status: ProjectStatus;
   createdAt: string;
+  personalizedBriefId: string | null;
+  personalizedBriefTitle: string | null;
   latestSubmissionId: string | null;
   latestSubmissionText: string | null;
   latestFeedbackComment: string | null;
@@ -97,6 +128,8 @@ export type TeacherSubmissionRecord = {
   projectId: string;
   studentId: string;
   studentName: string;
+  personalizedBriefId: string | null;
+  personalizedBriefTitle: string | null;
   title: string;
   subject: string;
   description: string;
@@ -173,6 +206,7 @@ export type ParentChildRecord = {
   feedbackCount: number;
   gradedAssessmentCount: number;
   averageAssessmentScore: number | null;
+  latestProjectId: string | null;
   latestProjectTitle: string | null;
   latestFeedbackComment: string | null;
   latestAssessmentTitle: string | null;
@@ -191,6 +225,162 @@ export type TeacherStudentOptionRecord = {
   fullName: string;
   cohortId: string | null;
   cohortTitle: string | null;
+};
+
+export type InterestAssessmentRecord = {
+  careerPreference: string | null;
+  entertainmentPreference: string | null;
+  workStyle: string | null;
+  industryInterest: string | null;
+  updatedAt: string | null;
+};
+
+export type SkillDiagnosticRecord = {
+  reading: SkillBand | null;
+  writing: SkillBand | null;
+  math: SkillBand | null;
+  history: SkillBand | null;
+  logic: SkillBand | null;
+  strengths: string[];
+  weaknesses: string[];
+  gradeLevelSummary: string;
+  updatedAt: string | null;
+};
+
+export type PersonalizedProjectMilestoneRecord = {
+  title: string;
+  description: string;
+};
+
+export type PersonalizedProjectRubricRecord = {
+  criterion: string;
+  description: string;
+};
+
+export type PersonalizedProjectTimelineRecord = {
+  label: string;
+  goal: string;
+};
+
+export type PersonalizedProjectBriefRecord = {
+  id: string;
+  title: string;
+  subject: string;
+  description: string;
+  teacherPriorities: string;
+  focusStrengths: string[];
+  focusWeaknesses: string[];
+  skillsTargeted: string[];
+  milestones: PersonalizedProjectMilestoneRecord[];
+  rubric: PersonalizedProjectRubricRecord[];
+  timeline: PersonalizedProjectTimelineRecord[];
+  projectMode: "individual" | "group";
+  targetLabel: string;
+  studentIds: string[];
+  groupName: string | null;
+  status: "generated" | "edited";
+  workspaceProjectId: string | null;
+  workspaceProjectCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ProjectTaskType = "checklist" | "submission";
+
+export type ProjectWorkspaceMilestoneRecord = {
+  id: string;
+  title: string;
+  description: string;
+  sortOrder: number;
+  dueDate: string | null;
+  completedTaskCount: number;
+  taskCount: number;
+};
+
+export type ProjectWorkspaceTaskRecord = {
+  id: string;
+  milestoneId: string | null;
+  title: string;
+  description: string;
+  taskType: ProjectTaskType;
+  sortOrder: number;
+  isRequired: boolean;
+  dueDate: string | null;
+  status: LessonTaskStatus;
+  responseText: string | null;
+  completedAt: string | null;
+  latestSubmissionId: string | null;
+  latestSubmissionText: string | null;
+  latestFeedbackComment: string | null;
+  latestFeedbackScore: number | null;
+  latestFeedbackTeacher: string | null;
+  files: SubmissionFileRecord[];
+};
+
+export type ProjectWorkspaceResourceRecord = {
+  id: string;
+  title: string;
+  description: string;
+  resourceType: "link" | "note";
+  externalUrl: string | null;
+  sortOrder: number;
+};
+
+export type ProjectWorkspaceSubmissionRecord = {
+  id: string;
+  submittedAt: string;
+  status: ProjectStatus;
+  submissionText: string;
+  files: SubmissionFileRecord[];
+  feedbackComment: string | null;
+  feedbackScore: number | null;
+  feedbackTeacher: string | null;
+};
+
+export type ProjectWorkspaceRecord = {
+  id: string;
+  studentId: string;
+  studentName: string;
+  title: string;
+  subject: string;
+  description: string;
+  status: ProjectStatus;
+  createdAt: string;
+  personalizedBriefId: string | null;
+  personalizedBriefTitle: string | null;
+  personalizedReason: string | null;
+  teacherPriorities: string | null;
+  targetSkills: string[];
+  rubric: PersonalizedProjectRubricRecord[];
+  timeline: PersonalizedProjectTimelineRecord[];
+  milestones: ProjectWorkspaceMilestoneRecord[];
+  tasks: ProjectWorkspaceTaskRecord[];
+  resources: ProjectWorkspaceResourceRecord[];
+  submissions: ProjectWorkspaceSubmissionRecord[];
+  reflectionNote: string | null;
+  reflectionUpdatedAt: string | null;
+  progressPercent: number;
+  completedTaskCount: number;
+  taskCount: number;
+  accessRole: UserRole;
+  accessLabel: string;
+  canStudentEdit: boolean;
+  canTeacherManage: boolean;
+  isReadOnly: boolean;
+};
+
+export type IncompleteStudentAccountRecord = {
+  id: string;
+  email: string | null;
+  fullName: string;
+  issue: "missing_profile" | "missing_role";
+};
+
+export type TeacherAssignmentDirectoryRecord = {
+  availableStudents: TeacherStudentOptionRecord[];
+  alreadyAssignedStudents: TeacherStudentOptionRecord[];
+  incompleteStudents: IncompleteStudentAccountRecord[];
+  totalStudentAccountCount: number;
 };
 
 export type ProgramAccessRecord = {
@@ -500,4 +690,14 @@ export type TeacherTriageRecord = {
   dueDate: string | null;
   dueState: DeadlineState;
   status: LessonTaskStatus;
+};
+
+export type BrokenUserRecord = {
+  id: string;
+  email: string | null;
+  fullName: string;
+  authRole: UserRole | null;
+  profileRole: UserRole | null;
+  profileRoleSource: "explicit" | "fallback" | null;
+  issue: "missing_profile" | "missing_role";
 };

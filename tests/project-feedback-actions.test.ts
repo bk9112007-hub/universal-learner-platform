@@ -64,7 +64,8 @@ describe("student submission and teacher feedback actions", () => {
     vi.doMock("@/lib/supabase/admin", () => ({
       createAdminClient: () =>
         createSupabaseMock({
-          lesson_task_progress: createQuery({ awaitResult: { data: null, error: null } })
+          lesson_task_progress: createQuery({ awaitResult: { data: null, error: null } }),
+          project_task_progress: createQuery({ maybeSingleResult: { data: null, error: null }, awaitResult: { data: null, error: null } })
         })
     }));
     vi.doMock("@/lib/programs/progress", () => ({

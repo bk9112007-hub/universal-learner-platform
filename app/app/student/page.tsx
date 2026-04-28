@@ -2,8 +2,11 @@ import Link from "next/link";
 
 import { AppShell } from "@/components/dashboard/app-shell";
 import { DashboardSection, EmptyState, MetricCard, StatusBadge } from "@/components/dashboard/dashboard-primitives";
+import { InterestAssessmentForm } from "@/components/dashboard/interest-assessment-form";
 import { NotificationFeed } from "@/components/dashboard/notification-feed";
 import { NotificationPreferenceForm } from "@/components/dashboard/notification-preference-form";
+import { ProjectWorkspaceLaunchForm } from "@/components/dashboard/project-workspace-launch-form";
+import { SkillDiagnosticForm } from "@/components/dashboard/skill-diagnostic-form";
 import { StudentProjectForm } from "@/components/dashboard/student-project-form";
 import { SubmissionFileList } from "@/components/dashboard/submission-file-list";
 import { assertRole } from "@/lib/auth/roles";
@@ -19,6 +22,11 @@ import {
   getStudentProjects
 } from "@/lib/dashboard/queries";
 import { formatDate } from "@/lib/format";
+import {
+  getStudentInterestAssessment,
+  getStudentPersonalizedProjectBriefs,
+  getStudentSkillDiagnostic
+} from "@/lib/projects/personalization";
 import type { NotificationPreferenceRecord, NotificationRecord } from "@/types/domain";
 
 export default async function StudentDashboardPage() {
@@ -39,12 +47,15 @@ export default async function StudentDashboardPage() {
     notificationError = (error as Error).message;
   }
 
-  const [projects, assessments, assessmentCount, enrolledPrograms, taskDeadlines] = await Promise.all([
+  const [projects, assessments, assessmentCount, enrolledPrograms, taskDeadlines, interestAssessment, skillDiagnostic, personalizedBriefs] = await Promise.all([
     getStudentProjects(user!.id),
     getStudentQuizAssignments(user!.id),
     getStudentAssessmentCount(user!.id),
     getStudentEnrolledPrograms(user!.id),
-    getStudentTaskDeadlines(user!.id)
+    getStudentTaskDeadlines(user!.id),
+    getStudentInterestAssessment(user!.id),
+    getStudentSkillDiagnostic(user!.id),
+    getStudentPersonalizedProjectBriefs(user!.id)
   ]);
 
   const feedbackCount = projects.filter((project) => project.latestFeedbackComment).length;
@@ -68,6 +79,98 @@ export default async function StudentDashboardPage() {
           detail={`${gradedAssessmentCount} graded, ${reviewedCount} project${reviewedCount === 1 ? "" : "s"} reviewed.`}
         />
       </section>
+
+      <DashboardSection
+        title="Student profile for project personalization"
+        description="These interests and skill levels feed the Personalized Project Creation Engine so future project briefs match the learner’s strengths, needs, and motivation."
+      >
+        <div className="grid gap-6 xl:grid-cols-2">
+          <div className="rounded-[1.5rem] border border-slate-200 p-5">
+            <h3 className="text-lg font-semibold text-ink">Interest assessment</h3>
+            <p className="mt-2 text-sm text-slate-600">Capture what kinds of careers, media, work styles, and industries make projects feel meaningful.</p>
+            <div className="mt-4">
+              <InterestAssessmentForm initialValue={interestAssessment} />
+            </div>
+          </div>
+          <div className="rounded-[1.5rem] border border-slate-200 p-5">
+            <h3 className="text-lg font-semibold text-ink">Skill diagnostic</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Save grade-level style performance bands across reading, writing, math, history, and logic so teacher-generated projects can target real growth areas.
+            </p>
+            <div className="mt-4">
+              <SkillDiagnosticForm initialValue={skillDiagnostic} />
+            </div>
+            {skillDiagnostic ? <p className="mt-4 text-sm text-slate-500">{skillDiagnostic.gradeLevelSummary}</p> : null}
+          </div>
+        </div>
+      </DashboardSection>
+
+      <DashboardSection
+        title="Personalized project briefs"
+        description="Teacher priorities, your interests, and your current skill profile combine here into structured project briefs with milestones, skills, rubric, and timeline."
+      >
+        {personalizedBriefs.length === 0 ? (
+          <EmptyState
+            title="No personalized projects assigned yet"
+            description="Once a teacher generates a customized brief for you or your cohort, it will appear here ready to launch into a real submission."
+          />
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-2">
+            {personalizedBriefs.map((brief) => (
+              <article key={brief.id} className="rounded-[1.5rem] border border-slate-200 p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-xl font-semibold text-ink">{brief.title}</h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {brief.subject} | {brief.targetLabel}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-800">{brief.status}</span>
+                </div>
+                <p className="mt-4 text-sm leading-6 text-slate-700">{brief.description}</p>
+                <div className="mt-4 rounded-3xl bg-slate-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Milestones</p>
+                  <div className="mt-3 space-y-2 text-sm text-slate-700">
+                    {brief.milestones.map((milestone) => (
+                      <p key={`${brief.id}-${milestone.title}`}>
+                        <span className="font-semibold">{milestone.title}:</span> {milestone.description}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-3xl bg-brand-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-700">Skills targeted</p>
+                    <p className="mt-3 text-sm text-brand-900">{brief.skillsTargeted.join(", ")}</p>
+                  </div>
+                  <div className="rounded-3xl bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Timeline</p>
+                    <div className="mt-3 space-y-2 text-sm text-slate-700">
+                      {brief.timeline.map((phase) => (
+                        <p key={`${brief.id}-${phase.label}`}>
+                          <span className="font-semibold">{phase.label}:</span> {phase.goal}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  {brief.workspaceProjectId ? (
+                    <Link
+                      href={`/app/projects/${brief.workspaceProjectId}`}
+                      className="inline-flex rounded-full bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-800"
+                    >
+                      Open project workspace
+                    </Link>
+                  ) : (
+                    <ProjectWorkspaceLaunchForm briefId={brief.id} />
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </DashboardSection>
 
       <DashboardSection
         title="Reminders"
@@ -196,7 +299,7 @@ export default async function StudentDashboardPage() {
           description="Attach evidence, send it to the teacher queue, and keep the latest files and feedback together in one record."
         >
           <div id="projects">
-            <StudentProjectForm />
+            <StudentProjectForm briefs={personalizedBriefs} />
           </div>
         </DashboardSection>
 
@@ -218,6 +321,7 @@ export default async function StudentDashboardPage() {
                     <div>
                       <h3 className="text-xl font-semibold text-ink">{project.title}</h3>
                       <p className="mt-1 text-sm text-slate-500">{project.subject}</p>
+                      {project.personalizedBriefTitle ? <p className="mt-1 text-sm text-brand-700">From brief: {project.personalizedBriefTitle}</p> : null}
                     </div>
                     <StatusBadge status={project.status} />
                   </div>
@@ -247,6 +351,12 @@ export default async function StudentDashboardPage() {
                       <p className="mt-2 text-sm text-brand-900">Your teacher has not left feedback yet.</p>
                     )}
                   </div>
+                  <Link
+                    href={`/app/projects/${project.id}`}
+                    className="mt-4 inline-flex rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-brand-300 hover:text-brand-900"
+                  >
+                    Open workspace
+                  </Link>
                 </article>
               ))}
             </div>
