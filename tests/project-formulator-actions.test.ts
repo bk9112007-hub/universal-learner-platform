@@ -143,6 +143,7 @@ describe("project formulator actions", () => {
         difficulty: "Intermediate",
         duration: "2 weeks",
         studentInterests: ["storms"],
+        experienceType: "mission_dashboard",
         title: "Future City Under Pressure: Crisis Response Planner",
         summary: "Summary",
         studentMission: "Mission",

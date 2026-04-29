@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getProjectCatalogItems } from "@/lib/project-catalog/queries";
+import { resolveProjectExperienceType } from "@/lib/projects/experience";
 import type {
   GeneratedProjectAssignmentRecord,
   GeneratedProjectRecord,
@@ -30,6 +31,14 @@ function mapGeneratedProjectRow(row: any): GeneratedProjectRecord {
     difficulty: row.difficulty,
     duration: row.duration,
     studentInterests: ensureStringArray(row.student_interests),
+    experienceType: resolveProjectExperienceType(row.experience_type, {
+      subject: row.subject,
+      title: row.title,
+      summary: row.summary,
+      outputTitle: row.output_snapshot?.title ?? row.output_snapshot?.["title"] ?? null,
+      roleTitle: row.role_snapshot?.title ?? row.role_snapshot?.["title"] ?? null,
+      scenarioTitle: row.scenario_snapshot?.title ?? row.scenario_snapshot?.["title"] ?? null
+    }),
     title: row.title,
     summary: row.summary,
     studentMission: row.student_mission,

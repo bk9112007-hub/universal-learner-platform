@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { getProfileForCurrentUser } from "@/lib/dashboard/queries";
 import { composeGeneratedProjectDraft } from "@/lib/project-formulator/engine";
+import { inferProjectExperienceType } from "@/lib/projects/experience";
 import { getGeneratedProjectById } from "@/lib/project-formulator/queries";
 import { getProjectCatalogDefinition } from "@/lib/project-catalog/catalog";
 import { createProjectWorkspaceFromGeneratedProject } from "@/lib/projects/workspace";
@@ -167,6 +168,7 @@ export async function createGeneratedProjectDraftAction(
         difficulty: draft.difficulty,
         duration: draft.duration,
         student_interests: draft.studentInterests,
+        experience_type: draft.experienceType,
         hook_id: hook.id,
         role_id: role.id,
         scenario_id: scenario.id,
@@ -260,6 +262,11 @@ export async function updateGeneratedProjectDraftAction(
       difficulty: parsed.data.difficulty,
       duration: parsed.data.duration,
       student_interests: parseInterests(parsed.data.studentInterests),
+      experience_type: inferProjectExperienceType({
+        subject: parsed.data.subject,
+        title: parsed.data.title,
+        summary: parsed.data.summary
+      }),
       title: parsed.data.title,
       summary: parsed.data.summary,
       student_mission: parsed.data.studentMission,

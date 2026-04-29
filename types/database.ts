@@ -386,6 +386,7 @@ export type Database = {
           lesson_task_id: string | null;
           personalized_brief_id: string | null;
           generated_project_id: string | null;
+          experience_type: string | null;
           personalized_reason: string | null;
           target_skills: string[] | null;
           workspace_rubric: Json;
@@ -407,6 +408,7 @@ export type Database = {
           lesson_task_id?: string | null;
           personalized_brief_id?: string | null;
           generated_project_id?: string | null;
+          experience_type?: string | null;
           personalized_reason?: string | null;
           target_skills?: string[] | null;
           workspace_rubric?: Json;
@@ -426,6 +428,7 @@ export type Database = {
           lesson_task_id?: string | null;
           personalized_brief_id?: string | null;
           generated_project_id?: string | null;
+          experience_type?: string | null;
           personalized_reason?: string | null;
           target_skills?: string[] | null;
           workspace_rubric?: Json;
@@ -922,6 +925,7 @@ export type Database = {
           difficulty: string;
           duration: string;
           student_interests: string[];
+          experience_type: string | null;
           hook_id: string | null;
           role_id: string | null;
           scenario_id: string | null;
@@ -954,6 +958,7 @@ export type Database = {
           difficulty: string;
           duration: string;
           student_interests?: string[];
+          experience_type?: string | null;
           hook_id?: string | null;
           role_id?: string | null;
           scenario_id?: string | null;
@@ -985,6 +990,7 @@ export type Database = {
           difficulty?: string;
           duration?: string;
           student_interests?: string[];
+          experience_type?: string | null;
           hook_id?: string | null;
           role_id?: string | null;
           scenario_id?: string | null;

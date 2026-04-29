@@ -3,6 +3,7 @@ import type {
   GeneratedProjectSnapshotRecord,
   ProjectCatalogItemRecord
 } from "@/types/domain";
+import { inferProjectExperienceType } from "@/lib/projects/experience";
 
 type FormulatorInput = {
   subject: string;
@@ -98,6 +99,14 @@ export function composeGeneratedProjectDraft(input: FormulatorInput): Omit<
     difficulty: input.difficulty,
     duration: input.duration,
     studentInterests: input.studentInterests,
+    experienceType: inferProjectExperienceType({
+      subject: input.subject,
+      title: createTitle(input),
+      summary: createSummary(input),
+      outputTitle: input.output.title,
+      roleTitle: input.role.title,
+      scenarioTitle: input.scenario.title
+    }),
     title: createTitle(input),
     summary: createSummary(input),
     studentMission: createMission(input),

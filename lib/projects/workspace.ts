@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { resolveProjectExperienceType } from "@/lib/projects/experience";
 import type {
   GeneratedProjectRecord,
   PersonalizedProjectBriefRecord,
@@ -231,6 +232,7 @@ export async function getProjectWorkspaceAccessContext(projectId: string): Promi
         lesson_task_id,
         personalized_brief_id,
         generated_project_id,
+        experience_type,
         personalized_reason,
         target_skills,
         workspace_rubric,
@@ -534,6 +536,7 @@ export async function createProjectWorkspaceFromGeneratedProject(params: {
     .insert({
       student_id: params.studentId,
       generated_project_id: params.generatedProject.id,
+      experience_type: params.generatedProject.experienceType,
       title: params.generatedProject.title,
       subject: params.generatedProject.subject,
       description: params.generatedProject.summary,
@@ -766,6 +769,13 @@ export async function getProjectWorkspace(projectId: string): Promise<ProjectWor
     studentId,
     studentName: studentProfile?.full_name ?? "Student",
     generatedProjectId: context.project.generated_project_id ?? null,
+    experienceType: resolveProjectExperienceType(context.project.experience_type, {
+      subject: context.project.subject,
+      title: context.project.title,
+      summary: context.project.description,
+      outputTitle: brief?.title ?? null,
+      scenarioTitle: brief?.description ?? null
+    }),
     title: context.project.title,
     subject: context.project.subject,
     description: context.project.description,

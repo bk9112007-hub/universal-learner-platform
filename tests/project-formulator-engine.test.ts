@@ -75,6 +75,7 @@ describe("project formulator engine", () => {
 
     expect(draft.title).toContain("Future City Under Pressure");
     expect(draft.title).toContain("Crisis Response Planner");
+    expect(draft.experienceType).toBe("mission_dashboard");
     expect(draft.learningGoals).toHaveLength(4);
     expect(draft.steps.length).toBeGreaterThanOrEqual(5);
     expect(draft.rubric[0]).toContain("Problem framing");

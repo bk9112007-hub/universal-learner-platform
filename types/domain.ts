@@ -25,6 +25,17 @@ export type Program = {
 
 export type ProjectCatalogType = "hooks" | "roles" | "scenarios" | "activities" | "outputs";
 export type ProjectCatalogStatus = "draft" | "approved" | "archived";
+export type ProjectExperienceType =
+  | "guided_tour"
+  | "interactive_map"
+  | "math_lab"
+  | "science_simulation"
+  | "timeline"
+  | "museum_exhibit"
+  | "mission_dashboard"
+  | "debate_trial"
+  | "business_pitch"
+  | "data_lab";
 
 export type ProjectCatalogItemRecord = {
   id: string;
@@ -69,6 +80,7 @@ export type GeneratedProjectRecord = {
   difficulty: string;
   duration: string;
   studentInterests: string[];
+  experienceType: ProjectExperienceType;
   title: string;
   summary: string;
   studentMission: string;
@@ -391,6 +403,7 @@ export type ProjectWorkspaceRecord = {
   studentId: string;
   studentName: string;
   generatedProjectId: string | null;
+  experienceType: ProjectExperienceType;
   title: string;
   subject: string;
   description: string;

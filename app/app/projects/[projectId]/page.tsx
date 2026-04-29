@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { ProjectChecklistTaskForm } from "@/components/dashboard/project-checklist-task-form";
+import { ProjectExperiencePanel } from "@/components/dashboard/project-experience-panel";
 import { ProjectMilestoneForm } from "@/components/dashboard/project-milestone-form";
 import { ProjectReflectionForm } from "@/components/dashboard/project-reflection-form";
 import { ProjectResourceForm } from "@/components/dashboard/project-resource-form";
@@ -162,6 +163,8 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
         <MetricCard label="Resources" value={String(projectWorkspace.resources.length)} detail="Teacher-curated links and notes that support execution without leaving the workspace." />
         <MetricCard label="Access" value={projectWorkspace.accessRole === "student" ? "Student" : projectWorkspace.accessRole === "teacher" ? "Teacher" : projectWorkspace.accessRole === "parent" ? "Parent" : "Admin"} detail={projectWorkspace.accessLabel} />
       </section>
+
+      <ProjectExperiencePanel workspace={projectWorkspace} />
 
       <div className="grid gap-6 xl:grid-cols-[0.34fr,0.66fr]">
         <DashboardSection
