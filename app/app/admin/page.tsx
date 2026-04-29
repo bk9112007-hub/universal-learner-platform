@@ -98,14 +98,22 @@ export default async function AdminDashboardPage({
 
       <DashboardSection
         title="Project catalog"
-        description="Phase 1 of the catalog engine is now live for staff and admin users. Use it to curate hooks, roles, scenarios, activities, and outputs before project formulation is added."
+        description="The catalog and human-only formulator now sit inside the authenticated workspace so staff can curate building blocks and assemble editable draft projects."
       >
-        <Link
-          href="/app/admin/project-catalog"
-          className="inline-flex rounded-full bg-brand-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-800"
-        >
-          Open project catalog
-        </Link>
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href="/app/admin/project-catalog"
+            className="inline-flex rounded-full bg-brand-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-800"
+          >
+            Open project catalog
+          </Link>
+          <Link
+            href="/app/admin/project-formulator"
+            className="inline-flex rounded-full border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-brand-300 hover:text-brand-700"
+          >
+            Open project formulator
+          </Link>
+        </div>
       </DashboardSection>
 
       <DashboardSection

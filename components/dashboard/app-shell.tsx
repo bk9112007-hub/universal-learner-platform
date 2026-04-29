@@ -19,7 +19,8 @@ const navItems = {
     { href: "/app/teacher#classes", label: "Classes", icon: Users },
     { href: "/app/teacher#projects", label: "Projects", icon: FolderKanban },
     { href: "/app/teacher#grading", label: "Grading", icon: ChartColumn },
-    { href: "/app/admin/project-catalog", label: "Catalog", icon: BookOpenCheck }
+    { href: "/app/admin/project-catalog", label: "Catalog", icon: BookOpenCheck },
+    { href: "/app/admin/project-formulator", label: "Formulator", icon: MessagesSquare }
   ],
   parent: [
     { href: "/app/parent", label: "Overview", icon: House },
@@ -31,6 +32,7 @@ const navItems = {
   admin: [
     { href: "/app/admin", label: "Overview", icon: House },
     { href: "/app/admin/project-catalog", label: "Catalog", icon: BookOpenCheck },
+    { href: "/app/admin/project-formulator", label: "Formulator", icon: MessagesSquare },
     { href: "/app/programs", label: "Programs", icon: ShieldCheck },
     { href: "/app/admin#users", label: "Users", icon: Users },
     { href: "/app/admin#analytics", label: "Analytics", icon: ChartColumn },

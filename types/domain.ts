@@ -51,6 +51,42 @@ export type ProjectCatalogSummaryRecord = {
   accessLabel: string;
 };
 
+export type GeneratedProjectApprovalStatus = "draft" | "needs_review" | "approved" | "assigned" | "archived";
+
+export type GeneratedProjectSnapshotRecord = {
+  id: string;
+  title: string;
+  summary: string;
+  details: string;
+  status: ProjectCatalogStatus;
+};
+
+export type GeneratedProjectRecord = {
+  id: string;
+  subject: string;
+  skillGoal: string;
+  gradeBand: string;
+  difficulty: string;
+  duration: string;
+  studentInterests: string[];
+  title: string;
+  summary: string;
+  studentMission: string;
+  learningGoals: string[];
+  steps: string[];
+  materials: string[];
+  rubric: string[];
+  reflectionQuestions: string[];
+  approvalStatus: GeneratedProjectApprovalStatus;
+  hookSnapshot: GeneratedProjectSnapshotRecord;
+  roleSnapshot: GeneratedProjectSnapshotRecord;
+  scenarioSnapshot: GeneratedProjectSnapshotRecord;
+  activitySnapshot: GeneratedProjectSnapshotRecord;
+  outputSnapshot: GeneratedProjectSnapshotRecord;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ShopifyProductSummary = {
   id: string;
   title: string;
