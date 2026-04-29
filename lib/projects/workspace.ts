@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type {
+  GeneratedProjectRecord,
   PersonalizedProjectBriefRecord,
   PersonalizedProjectRubricRecord,
   PersonalizedProjectTimelineRecord,
@@ -106,6 +107,14 @@ function parseTimeline(value: unknown): PersonalizedProjectTimelineRecord[] {
       return { label, goal };
     })
     .filter(Boolean) as PersonalizedProjectTimelineRecord[];
+}
+
+function parseStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0).map((entry) => entry.trim());
 }
 
 function buildPersonalizedReason(brief: WorkspaceBriefSeed): string {
@@ -221,10 +230,14 @@ export async function getProjectWorkspaceAccessContext(projectId: string): Promi
         lesson_id,
         lesson_task_id,
         personalized_brief_id,
+        generated_project_id,
         personalized_reason,
         target_skills,
         workspace_rubric,
         workspace_timeline,
+        student_mission,
+        workspace_materials,
+        workspace_reflection_questions,
         title,
         subject,
         description,
@@ -467,6 +480,115 @@ export async function ensureProjectWorkspaceSeedFromBrief(projectId: string, bri
   }
 }
 
+function mapGeneratedRubricToWorkspaceRubric(rubric: string[]): PersonalizedProjectRubricRecord[] {
+  return rubric.map((entry, index) => ({
+    criterion: `Criterion ${index + 1}`,
+    description: entry
+  }));
+}
+
+function mapGeneratedStepsToTasks(steps: string[]) {
+  const normalized = steps.filter((step) => step.trim().length > 0);
+  const checklistTasks = normalized.map((step, index) => ({
+    title: `Step ${index + 1}`,
+    description: step,
+    taskType: "checklist" as const,
+    sortOrder: index
+  }));
+
+  return [
+    ...checklistTasks,
+    {
+      title: "Submit final generated project work",
+      description: "Upload the completed generated project work for teacher review.",
+      taskType: "submission" as const,
+      sortOrder: checklistTasks.length
+    }
+  ];
+}
+
+export async function createProjectWorkspaceFromGeneratedProject(params: {
+  generatedProject: GeneratedProjectRecord;
+  studentId: string;
+  assignedBy: string;
+  cohortId?: string | null;
+}) {
+  const adminSupabase = createAdminClient();
+  const { data: existingProject, error: existingProjectError } = await adminSupabase
+    .from("projects")
+    .select("id")
+    .eq("student_id", params.studentId)
+    .eq("generated_project_id", params.generatedProject.id)
+    .maybeSingle();
+
+  if (existingProjectError) {
+    throw new Error(existingProjectError.message);
+  }
+
+  if (existingProject?.id) {
+    return existingProject.id;
+  }
+
+  const { data: project, error: projectError } = await adminSupabase
+    .from("projects")
+    .insert({
+      student_id: params.studentId,
+      generated_project_id: params.generatedProject.id,
+      title: params.generatedProject.title,
+      subject: params.generatedProject.subject,
+      description: params.generatedProject.summary,
+      personalized_reason: `Generated from ${params.generatedProject.hookSnapshot.title} for the role ${params.generatedProject.roleSnapshot.title}.`,
+      target_skills: [params.generatedProject.skillGoal],
+      workspace_rubric: mapGeneratedRubricToWorkspaceRubric(params.generatedProject.rubric),
+      workspace_timeline: [],
+      student_mission: params.generatedProject.studentMission,
+      workspace_materials: params.generatedProject.materials,
+      workspace_reflection_questions: params.generatedProject.reflectionQuestions,
+      status: "draft"
+    })
+    .select("id")
+    .single();
+
+  if (projectError || !project) {
+    throw new Error(projectError?.message ?? "Unable to create the generated project workspace.");
+  }
+
+  const tasks = mapGeneratedStepsToTasks(params.generatedProject.steps);
+  const { error: taskInsertError } = await adminSupabase.from("project_tasks").insert(
+    tasks.map((task) => ({
+      project_id: project.id,
+      title: task.title,
+      description: task.description,
+      task_type: task.taskType,
+      sort_order: task.sortOrder,
+      is_required: true
+    }))
+  );
+
+  if (taskInsertError) {
+    throw new Error(taskInsertError.message);
+  }
+
+  if (params.generatedProject.materials.length > 0) {
+    const { error: resourceInsertError } = await adminSupabase.from("project_resources").insert(
+      params.generatedProject.materials.map((material, index) => ({
+        project_id: project.id,
+        title: `Material ${index + 1}`,
+        description: material,
+        resource_type: "note",
+        sort_order: index,
+        created_by: params.assignedBy
+      }))
+    );
+
+    if (resourceInsertError) {
+      throw new Error(resourceInsertError.message);
+    }
+  }
+
+  return project.id;
+}
+
 export async function getProjectWorkspace(projectId: string): Promise<ProjectWorkspaceRecord | null> {
   const context = await getProjectWorkspaceAccessContext(projectId);
   if (!context.allowed || !context.project || !context.profile || !context.accessRole) {
@@ -643,9 +765,11 @@ export async function getProjectWorkspace(projectId: string): Promise<ProjectWor
     id: context.project.id,
     studentId,
     studentName: studentProfile?.full_name ?? "Student",
+    generatedProjectId: context.project.generated_project_id ?? null,
     title: context.project.title,
     subject: context.project.subject,
     description: context.project.description,
+    studentMission: context.project.student_mission ?? null,
     status: context.project.status,
     createdAt: context.project.created_at,
     personalizedBriefId: context.project.personalized_brief_id ?? null,
@@ -657,6 +781,8 @@ export async function getProjectWorkspace(projectId: string): Promise<ProjectWor
       : fallbackSeed?.targetSkills ?? [],
     rubric: parseRubric(context.project.workspace_rubric).length > 0 ? parseRubric(context.project.workspace_rubric) : fallbackSeed?.rubric ?? [],
     timeline: parseTimeline(context.project.workspace_timeline).length > 0 ? parseTimeline(context.project.workspace_timeline) : fallbackSeed?.timeline ?? [],
+    materials: parseStringList(context.project.workspace_materials),
+    reflectionQuestions: parseStringList(context.project.workspace_reflection_questions),
     milestones: milestoneRecords,
     tasks: taskRecords,
     resources: (resources ?? []).map((resource: any) => ({

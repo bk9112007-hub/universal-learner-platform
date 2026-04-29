@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getProjectCatalogItems } from "@/lib/project-catalog/queries";
 import type {
+  GeneratedProjectAssignmentRecord,
   GeneratedProjectRecord,
   ProjectCatalogItemRecord,
   ProjectCatalogType
@@ -95,4 +96,84 @@ export async function getGeneratedProjectById(draftProjectId: string): Promise<G
   }
 
   return data ? mapGeneratedProjectRow(data) : null;
+}
+
+export async function getGeneratedProjectAssignments(draftProjectId: string): Promise<GeneratedProjectAssignmentRecord[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("generated_project_assignments")
+    .select("id, generated_project_id, student_id, cohort_id, project_id, status, created_at")
+    .eq("generated_project_id", draftProjectId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const studentIds = Array.from(new Set((data ?? []).map((row: any) => row.student_id)));
+  const cohortIds = Array.from(new Set((data ?? []).map((row: any) => row.cohort_id).filter(Boolean)));
+  const [{ data: profiles, error: profilesError }, { data: cohorts, error: cohortsError }, generatedProject] = await Promise.all([
+    studentIds.length ? supabase.from("profiles").select("id, full_name").in("id", studentIds) : { data: [], error: null },
+    cohortIds.length ? supabase.from("cohorts").select("id, title").in("id", cohortIds) : { data: [], error: null },
+    getGeneratedProjectById(draftProjectId)
+  ]);
+
+  if (profilesError) throw new Error(profilesError.message);
+  if (cohortsError) throw new Error(cohortsError.message);
+
+  const profileMap = new Map<string, string>((profiles ?? []).map((profile: any) => [profile.id, profile.full_name ?? "Student"]));
+  const cohortMap = new Map<string, string>((cohorts ?? []).map((cohort: any) => [cohort.id, cohort.title]));
+
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    generatedProjectId: row.generated_project_id,
+    generatedProjectTitle: generatedProject?.title ?? "Generated project",
+    studentId: row.student_id,
+    studentName: profileMap.get(row.student_id) ?? "Student",
+    cohortId: row.cohort_id ?? null,
+    cohortTitle: row.cohort_id ? cohortMap.get(row.cohort_id) ?? null : null,
+    projectId: row.project_id ?? null,
+    status: row.status,
+    createdAt: row.created_at
+  }));
+}
+
+export async function getGeneratedAssignedProjectsForStudent(studentId: string): Promise<GeneratedProjectAssignmentRecord[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("generated_project_assignments")
+    .select("id, generated_project_id, student_id, cohort_id, project_id, status, created_at")
+    .eq("student_id", studentId)
+    .neq("status", "archived")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const generatedProjectIds = Array.from(new Set((data ?? []).map((row: any) => row.generated_project_id)));
+  const cohortIds = Array.from(new Set((data ?? []).map((row: any) => row.cohort_id).filter(Boolean)));
+  const [{ data: generatedProjects, error: generatedProjectsError }, { data: cohorts, error: cohortsError }] = await Promise.all([
+    generatedProjectIds.length ? supabase.from("generated_projects").select("id, title").in("id", generatedProjectIds) : { data: [], error: null },
+    cohortIds.length ? supabase.from("cohorts").select("id, title").in("id", cohortIds) : { data: [], error: null }
+  ]);
+
+  if (generatedProjectsError) throw new Error(generatedProjectsError.message);
+  if (cohortsError) throw new Error(cohortsError.message);
+
+  const generatedProjectMap = new Map<string, string>((generatedProjects ?? []).map((row: any) => [row.id, row.title]));
+  const cohortMap = new Map<string, string>((cohorts ?? []).map((cohort: any) => [cohort.id, cohort.title]));
+
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    generatedProjectId: row.generated_project_id,
+    generatedProjectTitle: generatedProjectMap.get(row.generated_project_id) ?? "Generated project",
+    studentId: row.student_id,
+    studentName: "You",
+    cohortId: row.cohort_id ?? null,
+    cohortTitle: row.cohort_id ? cohortMap.get(row.cohort_id) ?? null : null,
+    projectId: row.project_id ?? null,
+    status: row.status,
+    createdAt: row.created_at
+  }));
 }

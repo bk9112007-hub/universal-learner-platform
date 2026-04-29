@@ -9,7 +9,7 @@ const navItems = {
   student: [
     { href: "/app/student", label: "Dashboard", icon: House },
     { href: "/app/programs", label: "Programs", icon: ShieldCheck },
-    { href: "/app/student#projects", label: "Projects", icon: FolderKanban },
+    { href: "/app/projects", label: "Projects", icon: FolderKanban },
     { href: "/app/student#assessments", label: "Assessments", icon: BookOpenCheck },
     { href: "/app/student#feedback", label: "Feedback", icon: MessagesSquare }
   ],

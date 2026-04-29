@@ -385,10 +385,14 @@ export type Database = {
           lesson_id: string | null;
           lesson_task_id: string | null;
           personalized_brief_id: string | null;
+          generated_project_id: string | null;
           personalized_reason: string | null;
           target_skills: string[] | null;
           workspace_rubric: Json;
           workspace_timeline: Json;
+          student_mission: string | null;
+          workspace_materials: Json;
+          workspace_reflection_questions: Json;
           title: string;
           subject: string;
           description: string;
@@ -402,10 +406,14 @@ export type Database = {
           lesson_id?: string | null;
           lesson_task_id?: string | null;
           personalized_brief_id?: string | null;
+          generated_project_id?: string | null;
           personalized_reason?: string | null;
           target_skills?: string[] | null;
           workspace_rubric?: Json;
           workspace_timeline?: Json;
+          student_mission?: string | null;
+          workspace_materials?: Json;
+          workspace_reflection_questions?: Json;
           title: string;
           subject: string;
           description: string;
@@ -417,10 +425,14 @@ export type Database = {
           lesson_id?: string | null;
           lesson_task_id?: string | null;
           personalized_brief_id?: string | null;
+          generated_project_id?: string | null;
           personalized_reason?: string | null;
           target_skills?: string[] | null;
           workspace_rubric?: Json;
           workspace_timeline?: Json;
+          student_mission?: string | null;
+          workspace_materials?: Json;
+          workspace_reflection_questions?: Json;
           title?: string;
           subject?: string;
           description?: string;
@@ -994,6 +1006,38 @@ export type Database = {
           approval_status?: "draft" | "needs_review" | "approved" | "assigned" | "archived";
           created_by?: string | null;
           updated_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      generated_project_assignments: {
+        Row: {
+          id: string;
+          generated_project_id: string;
+          student_id: string;
+          cohort_id: string | null;
+          project_id: string | null;
+          assigned_by: string | null;
+          status: "assigned" | "launched" | "archived";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          generated_project_id: string;
+          student_id: string;
+          cohort_id?: string | null;
+          project_id?: string | null;
+          assigned_by?: string | null;
+          status?: "assigned" | "launched" | "archived";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          cohort_id?: string | null;
+          project_id?: string | null;
+          assigned_by?: string | null;
+          status?: "assigned" | "launched" | "archived";
           updated_at?: string;
         };
         Relationships: [];

@@ -5,7 +5,9 @@ import { z } from "zod";
 
 import { getProfileForCurrentUser } from "@/lib/dashboard/queries";
 import { composeGeneratedProjectDraft } from "@/lib/project-formulator/engine";
+import { getGeneratedProjectById } from "@/lib/project-formulator/queries";
 import { getProjectCatalogDefinition } from "@/lib/project-catalog/catalog";
+import { createProjectWorkspaceFromGeneratedProject } from "@/lib/projects/workspace";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type ProjectFormulatorActionState = {
@@ -45,6 +47,16 @@ const updateGeneratedProjectSchema = z.object({
   rubric: z.string().min(20),
   reflectionQuestions: z.string().min(20),
   intent: z.enum(["save_draft", "approve", "assign_later", "archive"])
+});
+
+const assignGeneratedProjectToStudentSchema = z.object({
+  draftProjectId: z.string().uuid(),
+  studentId: z.string().uuid()
+});
+
+const assignGeneratedProjectToCohortSchema = z.object({
+  draftProjectId: z.string().uuid(),
+  cohortId: z.string().uuid()
 });
 
 async function requireStaffOrAdmin() {
@@ -277,4 +289,167 @@ export async function updateGeneratedProjectDraftAction(
             ? "Draft archived."
             : "Draft saved."
   };
+}
+
+export async function assignGeneratedProjectToStudentAction(
+  _: ProjectFormulatorActionState,
+  formData: FormData
+): Promise<ProjectFormulatorActionState> {
+  let actor;
+  try {
+    actor = await requireStaffOrAdmin();
+  } catch (error) {
+    return { error: (error as Error).message };
+  }
+
+  const parsed = assignGeneratedProjectToStudentSchema.safeParse({
+    draftProjectId: formData.get("draftProjectId"),
+    studentId: formData.get("studentId")
+  });
+
+  if (!parsed.success) {
+    return { error: "Please choose a student before assigning this project." };
+  }
+
+  const generatedProject = await getGeneratedProjectById(parsed.data.draftProjectId);
+  if (!generatedProject) {
+    return { error: "That generated project draft could not be found." };
+  }
+  if (!["approved", "assigned"].includes(generatedProject.approvalStatus)) {
+    return { error: "Only approved drafts can be assigned to learners." };
+  }
+
+  try {
+    const projectId = await createProjectWorkspaceFromGeneratedProject({
+      generatedProject,
+      studentId: parsed.data.studentId,
+      assignedBy: actor.user.id
+    });
+
+    const supabase = createAdminClient();
+    const { error } = await supabase.from("generated_project_assignments").upsert(
+      {
+        generated_project_id: parsed.data.draftProjectId,
+        student_id: parsed.data.studentId,
+        project_id: projectId,
+        assigned_by: actor.user.id,
+        status: "launched"
+      },
+      { onConflict: "generated_project_id,student_id" }
+    );
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    await supabase
+      .from("generated_projects")
+      .update({
+        approval_status: "assigned",
+        updated_by: actor.user.id
+      })
+      .eq("id", parsed.data.draftProjectId);
+
+    revalidatePath("/app/projects");
+    revalidatePath(`/app/projects/${projectId}`);
+    revalidatePath(`/app/admin/project-formulator/${parsed.data.draftProjectId}`);
+    revalidatePath("/app/student");
+    revalidatePath("/app/teacher");
+    return { success: "Generated project assigned and launched for the student workspace." };
+  } catch (error) {
+    return { error: (error as Error).message };
+  }
+}
+
+export async function assignGeneratedProjectToCohortAction(
+  _: ProjectFormulatorActionState,
+  formData: FormData
+): Promise<ProjectFormulatorActionState> {
+  let actor;
+  try {
+    actor = await requireStaffOrAdmin();
+  } catch (error) {
+    return { error: (error as Error).message };
+  }
+
+  const parsed = assignGeneratedProjectToCohortSchema.safeParse({
+    draftProjectId: formData.get("draftProjectId"),
+    cohortId: formData.get("cohortId")
+  });
+
+  if (!parsed.success) {
+    return { error: "Please choose a cohort before assigning this project." };
+  }
+
+  const generatedProject = await getGeneratedProjectById(parsed.data.draftProjectId);
+  if (!generatedProject) {
+    return { error: "That generated project draft could not be found." };
+  }
+  if (!["approved", "assigned"].includes(generatedProject.approvalStatus)) {
+    return { error: "Only approved drafts can be assigned to cohorts." };
+  }
+
+  const supabase = createAdminClient();
+  const { data: assignments, error: assignmentsError } = await supabase
+    .from("teacher_student_assignments")
+    .select("student_id")
+    .eq("cohort_id", parsed.data.cohortId);
+
+  if (assignmentsError) {
+    return { error: assignmentsError.message };
+  }
+
+  const studentIds: string[] = Array.from(
+    new Set(
+      (assignments ?? [])
+        .map((assignment: any) => assignment.student_id)
+        .filter((studentId: unknown): studentId is string => typeof studentId === "string")
+    )
+  );
+  if (studentIds.length === 0) {
+    return { error: "This cohort does not have any assigned learners yet." };
+  }
+
+  try {
+    for (const studentId of studentIds) {
+      const projectId = await createProjectWorkspaceFromGeneratedProject({
+        generatedProject,
+        studentId,
+        assignedBy: actor.user.id,
+        cohortId: parsed.data.cohortId
+      });
+
+      const { error } = await supabase.from("generated_project_assignments").upsert(
+        {
+          generated_project_id: parsed.data.draftProjectId,
+          student_id: studentId,
+          cohort_id: parsed.data.cohortId,
+          project_id: projectId,
+          assigned_by: actor.user.id,
+          status: "launched"
+        },
+        { onConflict: "generated_project_id,student_id" }
+      );
+
+      if (error) {
+        return { error: error.message };
+      }
+    }
+
+    await supabase
+      .from("generated_projects")
+      .update({
+        approval_status: "assigned",
+        updated_by: actor.user.id
+      })
+      .eq("id", parsed.data.draftProjectId);
+
+    revalidatePath("/app/projects");
+    revalidatePath(`/app/admin/project-formulator/${parsed.data.draftProjectId}`);
+    revalidatePath("/app/student");
+    revalidatePath("/app/teacher");
+    return { success: "Generated project assigned to the cohort and launched into student workspaces." };
+  } catch (error) {
+    return { error: (error as Error).message };
+  }
 }

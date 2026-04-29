@@ -117,4 +117,89 @@ describe("project formulator actions", () => {
 
     expect(updateQuery.update).toHaveBeenCalledWith(expect.objectContaining({ approval_status: "assigned" }));
   });
+
+  it("assigns an approved generated project to a student and launches the real workspace", async () => {
+    mockStaffProfile();
+
+    const assignmentQuery = createQuery({
+      awaitResult: {
+        data: null,
+        error: null
+      }
+    });
+    const generatedProjectUpdateQuery = createQuery({
+      awaitResult: {
+        data: null,
+        error: null
+      }
+    });
+
+    vi.doMock("@/lib/project-formulator/queries", () => ({
+      getGeneratedProjectById: vi.fn(async () => ({
+        id: "draft-1",
+        subject: "Science",
+        skillGoal: "Explanatory writing",
+        gradeBand: "Middle school",
+        difficulty: "Intermediate",
+        duration: "2 weeks",
+        studentInterests: ["storms"],
+        title: "Future City Under Pressure: Crisis Response Planner",
+        summary: "Summary",
+        studentMission: "Mission",
+        learningGoals: ["Goal"],
+        steps: ["Step 1"],
+        materials: ["Material 1"],
+        rubric: ["Criterion 1"],
+        reflectionQuestions: ["Question 1"],
+        approvalStatus: "approved",
+        hookSnapshot: { id: "hook-1", title: "Hook", summary: "Summary", details: "Details", status: "approved" },
+        roleSnapshot: { id: "role-1", title: "Role", summary: "Summary", details: "Details", status: "approved" },
+        scenarioSnapshot: { id: "scenario-1", title: "Scenario", summary: "Summary", details: "Details", status: "approved" },
+        activitySnapshot: { id: "activity-1", title: "Activity", summary: "Summary", details: "Details", status: "approved" },
+        outputSnapshot: { id: "output-1", title: "Output", summary: "Summary", details: "Details", status: "approved" },
+        createdAt: "",
+        updatedAt: ""
+      }))
+    }));
+
+    vi.doMock("@/lib/projects/workspace", () => ({
+      createProjectWorkspaceFromGeneratedProject: vi.fn(async () => "project-1")
+    }));
+
+    vi.doMock("@/lib/supabase/admin", () => ({
+      createAdminClient: () => ({
+        from: vi.fn((table: string) => {
+          if (table === "generated_project_assignments") {
+            return assignmentQuery;
+          }
+          if (table === "generated_projects") {
+            return generatedProjectUpdateQuery;
+          }
+          throw new Error(`Unexpected table ${table}`);
+        })
+      })
+    }));
+
+    const { assignGeneratedProjectToStudentAction } = await import("@/lib/project-formulator/actions");
+    const formData = new FormData();
+    formData.set("draftProjectId", "11111111-1111-4111-8111-111111111111");
+    formData.set("studentId", "22222222-2222-4222-8222-222222222222");
+
+    await expect(assignGeneratedProjectToStudentAction({}, formData)).resolves.toEqual({
+      success: "Generated project assigned and launched for the student workspace."
+    });
+
+    expect(assignmentQuery.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        project_id: "project-1",
+        status: "launched"
+      }),
+      { onConflict: "generated_project_id,student_id" }
+    );
+    expect(generatedProjectUpdateQuery.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approval_status: "assigned"
+      })
+    );
+  });
 });

@@ -1,11 +1,16 @@
 import { notFound } from "next/navigation";
 
+import Link from "next/link";
+
+import { getQuizAssignmentTargets } from "@/lib/assessments/queries";
+import { GeneratedProjectAssignCohortForm } from "@/components/admin/generated-project-assign-cohort-form";
+import { GeneratedProjectAssignStudentForm } from "@/components/admin/generated-project-assign-student-form";
 import { GeneratedProjectEditorForm } from "@/components/admin/generated-project-editor-form";
 import { AppShell } from "@/components/dashboard/app-shell";
-import { DashboardSection, MetricCard } from "@/components/dashboard/dashboard-primitives";
+import { DashboardSection, EmptyState, MetricCard } from "@/components/dashboard/dashboard-primitives";
 import { assertRole } from "@/lib/auth/roles";
 import { getProfileForCurrentUser } from "@/lib/dashboard/queries";
-import { getGeneratedProjectById } from "@/lib/project-formulator/queries";
+import { getGeneratedProjectAssignments, getGeneratedProjectById } from "@/lib/project-formulator/queries";
 
 function SnapshotCard({
   title,
@@ -45,6 +50,11 @@ export default async function GeneratedProjectDraftPage({
     notFound();
   }
 
+  const [assignmentTargets, assignments] = await Promise.all([
+    getQuizAssignmentTargets(profile!.id, profile!.role),
+    getGeneratedProjectAssignments(draftProjectId)
+  ]);
+
   return (
     <AppShell
       role={profile!.role}
@@ -62,6 +72,68 @@ export default async function GeneratedProjectDraftPage({
         description="This is the human-authored version first. Staff can revise every instructional section before the platform moves into assignment workflows."
       >
         <GeneratedProjectEditorForm project={project} />
+      </DashboardSection>
+
+      <DashboardSection
+        title="Assignment and launch"
+        description="Approved generated projects can now be assigned directly to a learner or to an entire cohort, and each assignment launches a real student project workspace."
+      >
+        {project.approvalStatus !== "approved" && project.approvalStatus !== "assigned" ? (
+          <EmptyState title="Approve this draft before assigning it" description="Save the draft as approved first, then assign it to a student or cohort." />
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-2">
+            <div className="rounded-[1.5rem] border border-slate-200 p-5">
+              {assignmentTargets.students.length === 0 ? (
+                <EmptyState title="No student targets available" description="Students must exist in the current teacher/admin scope before this draft can be launched." />
+              ) : (
+                <GeneratedProjectAssignStudentForm
+                  draftProjectId={project.id}
+                  students={assignmentTargets.students.map((student) => ({ id: student.id, fullName: student.fullName }))}
+                />
+              )}
+            </div>
+            <div className="rounded-[1.5rem] border border-slate-200 p-5">
+              {assignmentTargets.cohorts.length === 0 ? (
+                <EmptyState title="No cohorts available" description="Create a cohort first if you want to launch the project to a group of learners at once." />
+              ) : (
+                <GeneratedProjectAssignCohortForm draftProjectId={project.id} cohorts={assignmentTargets.cohorts} />
+              )}
+            </div>
+          </div>
+        )}
+      </DashboardSection>
+
+      <DashboardSection
+        title="Assignment history"
+        description="Each assignment creates or reconnects a real student project workspace while preserving the original generated project snapshots."
+      >
+        {assignments.length === 0 ? (
+          <EmptyState title="No assignments yet" description="Assign this approved generated project to a learner or cohort to create real student workspaces." />
+        ) : (
+          <div className="space-y-4">
+            {assignments.map((assignment) => (
+              <article key={assignment.id} className="rounded-[1.5rem] border border-slate-200 p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-ink">{assignment.studentName}</h3>
+                    <p className="mt-2 text-sm text-slate-600">
+                      {assignment.cohortTitle ? `${assignment.cohortTitle} | ` : ""}
+                      {assignment.status} | Assigned {new Date(assignment.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  {assignment.projectId ? (
+                    <Link
+                      href={`/app/projects/${assignment.projectId}`}
+                      className="rounded-full bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-800"
+                    >
+                      Open workspace
+                    </Link>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </DashboardSection>
 
       <DashboardSection

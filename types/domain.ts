@@ -87,6 +87,19 @@ export type GeneratedProjectRecord = {
   updatedAt: string;
 };
 
+export type GeneratedProjectAssignmentRecord = {
+  id: string;
+  generatedProjectId: string;
+  generatedProjectTitle: string;
+  studentId: string;
+  studentName: string;
+  cohortId: string | null;
+  cohortTitle: string | null;
+  projectId: string | null;
+  status: "assigned" | "launched" | "archived";
+  createdAt: string;
+};
+
 export type ShopifyProductSummary = {
   id: string;
   title: string;
@@ -377,9 +390,11 @@ export type ProjectWorkspaceRecord = {
   id: string;
   studentId: string;
   studentName: string;
+  generatedProjectId: string | null;
   title: string;
   subject: string;
   description: string;
+  studentMission: string | null;
   status: ProjectStatus;
   createdAt: string;
   personalizedBriefId: string | null;
@@ -389,6 +404,8 @@ export type ProjectWorkspaceRecord = {
   targetSkills: string[];
   rubric: PersonalizedProjectRubricRecord[];
   timeline: PersonalizedProjectTimelineRecord[];
+  materials: string[];
+  reflectionQuestions: string[];
   milestones: ProjectWorkspaceMilestoneRecord[];
   tasks: ProjectWorkspaceTaskRecord[];
   resources: ProjectWorkspaceResourceRecord[];

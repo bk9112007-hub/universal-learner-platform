@@ -250,6 +250,13 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
                   </div>
                 </div>
 
+                {workspace.studentMission ? (
+                  <div className="rounded-[1.5rem] border border-slate-200 p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Student mission</p>
+                    <p className="mt-3 text-sm leading-7 text-slate-700">{workspace.studentMission}</p>
+                  </div>
+                ) : null}
+
                 <div className="rounded-[1.5rem] bg-brand-50 p-5">
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-700">Personalized reason / fit</p>
                   <p className="mt-3 text-sm leading-7 text-brand-950">
@@ -285,6 +292,37 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
                             <p className="text-sm font-semibold text-ink">{entry.label}</p>
                             <p className="mt-1 text-sm text-slate-600">{entry.goal}</p>
                           </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-[1.5rem] border border-slate-200 p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Materials</p>
+                    {workspace.materials.length === 0 ? (
+                      <p className="mt-3 text-sm text-slate-500">No materials have been listed for this workspace yet.</p>
+                    ) : (
+                      <div className="mt-3 space-y-2">
+                        {workspace.materials.map((material) => (
+                          <p key={material} className="text-sm text-slate-700">
+                            {material}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="rounded-[1.5rem] border border-slate-200 p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Reflection prompts</p>
+                    {workspace.reflectionQuestions.length === 0 ? (
+                      <p className="mt-3 text-sm text-slate-500">No reflection prompts have been added yet.</p>
+                    ) : (
+                      <div className="mt-3 space-y-2">
+                        {workspace.reflectionQuestions.map((question) => (
+                          <p key={question} className="text-sm text-slate-700">
+                            {question}
+                          </p>
                         ))}
                       </div>
                     )}
